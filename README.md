@@ -1,4 +1,4 @@
-#Edd WiSe
+# Edd WiSe
 
 Edd WiSe - **E**vent **d**riven **d**esign over **W**eb **S**ocket - is a tool to design uni or bi-directional event driven web applications.
 
