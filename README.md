@@ -2,7 +2,10 @@
 
 Edd WiSe - **E**vent **d**riven **d**esign over **W**eb **S**ocket - is a tool to design uni or bi-directional event driven web applications.
 
-You can provide a simple description of your service, with a subset of Golang syntax, you are able to generate **documented** code of both server (Golang) and client (Javascript).
+You can provide a simple description of your service with a subset of Golang syntax,
+and you are able to generate **documented** code of both server (Golang) and client (Javascript), and dummy server/client implementations to be filled with business logic.
+
+
 ## Install
 
 ```shell
