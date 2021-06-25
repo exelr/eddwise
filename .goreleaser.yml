@@ -1,4 +1,4 @@
-project_name: eddwise
+project_name: edd
 builds:
   - goos:
       - linux
