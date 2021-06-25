@@ -1,4 +1,4 @@
-project_name: edd
+project_name: eddwise
 builds:
   - goos:
       - linux
@@ -8,6 +8,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    id: "edd"
+    id: "eddwise"
+    binary: edd
     dir: .
     main: ./cmd/edd
