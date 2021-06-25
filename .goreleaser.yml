@@ -1,0 +1,13 @@
+project_name: eddwise
+builds:
+    goos:
+      - linux
+      - windows
+      - darwin
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+    id: "eddwise"
+    dir: .
+    main: ./cmd/edd
