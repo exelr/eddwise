@@ -29,8 +29,12 @@ var (
 )
 
 func printVersion() {
-	fmt.Printf("Edd WiSe @ %s\n", version)
-	fmt.Printf("Released on %s (%s)\n", date, commit)
+	var com = commit
+	if len(com) > 7 {
+		com = com[:7]
+	}
+	fmt.Printf("Edd WiSe version %s\n", version)
+	fmt.Printf("Released on %s (%s)\n", date, com)
 }
 func init() {
 
