@@ -1,6 +1,6 @@
 project_name: eddwise
 builds:
-    goos:
+  - goos:
       - linux
       - windows
       - darwin
