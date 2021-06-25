@@ -707,7 +707,7 @@ func ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
 		var fieldname = field.Names[0].Name
 		//var fieldIdent *ast.Ident
 		var IsPointer = false
-		var typeName = ""
+		var typeName string
 		switch t := field.Type.(type) {
 		default:
 			return nil, fmt.Errorf("cannot parse field %s in %s struct", fieldname, name)
