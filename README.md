@@ -56,27 +56,27 @@ Server:
 package main
 
 import (
-	"log"
-	
-	"github.com/hacktales/eddwise"
-	"pingpong/gen/pingpong"
+    "log"
+
+    "github.com/hacktales/eddwise"
+    "pingpong/gen/pingpong"
 )
 
 type PingPongChannel struct {
-	pingpong.PingPong
+    pingpong.PingPong
 }
 
 func (ch *PingPongChannel) OnPing(ctx *pingpong.PingPongContext, ping *pingpong.Ping) error {
-	return ch.SendPong(ctx.GetClient(), &pingpong.Pong{Id: ping.Id})
+    return ch.SendPong(ctx.GetClient(), &pingpong.Pong{Id: ping.Id})
 }
 
 func main(){
-	var server = eddwise.NewServer()
-	var ch = &PingPongChannel{}
-	if err := server.Register(ch); err != nil {
-		log.Fatalln("unable to register service PingPong: ", err)
-	}
-	log.Fatalln(server.StartWS("/pingpong", 3000))
+    var server = eddwise.NewServer()
+    var ch = &PingPongChannel{}
+    if err := server.Register(ch); err != nil {
+        log.Fatalln("unable to register service PingPong: ", err)
+    }
+    log.Fatalln(server.StartWS("/pingpong", 3000))
 }
 
 ```
