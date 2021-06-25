@@ -23,22 +23,22 @@ package pingpong // Package pingpong defines the domain as "pingpong"
 
 // PingPong defines the channel with its events
 type PingPong interface {
-	Enable (
-		Ping,
-		Pong,
+    Enable (
+        Ping, 
+        Pong,
     ) //enable those messages to be propagated over the channel
-	ClientToServer(Ping) //opt. Direction of the Ping message
-	ServerToClient(Pong) //opt. Direction of the Pong message
+    ClientToServer(Ping) //opt. Direction of the Ping message
+    ServerToClient(Pong) //opt. Direction of the Pong message
 }
 
 // implement the events structures
 
 type Ping struct {
-	id int
+    id int
 }
 
 type Pong struct {
-	id int
+    id int
 }
 ```
 
