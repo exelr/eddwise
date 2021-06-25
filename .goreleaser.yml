@@ -8,6 +8,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    id: "eddwise"
+    id: "edd"
     dir: .
     main: ./cmd/edd

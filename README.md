@@ -1,6 +1,6 @@
 # Edd WiSe
 
-![Release](https://img.shields.io/github/release/exelr/eddwise.svg)
+![Release](https://img.shields.io/github/v/release/exelr/eddwise.svg)
 ![Test](https://github.com/exelr/eddwise/workflows/Test/badge.svg)
 ![Security](https://github.com/exelr/eddwise/workflows/Security/badge.svg)
 ![Linter](https://github.com/exelr/eddwise/workflows/Linter/badge.svg)
@@ -12,6 +12,8 @@ and you are able to generate **documented** code of both server (Golang) and cli
 
 
 ## Install
+
+Download the latest version for your OS from [releases](https://github.com/exelr/eddwise/releases) or install it from go:
 
 ```shell
 go install github.com/exelr/eddwise/cmd/edd
