@@ -9,4 +9,4 @@ jobs:
       - name: Run Gosec
         uses: securego/gosec@master
         with:
-          args: -exclude-dir=examples ./...
+          args: -exclude-dir=examples -exclude=G304 ./... #exclude file reading check from variable
