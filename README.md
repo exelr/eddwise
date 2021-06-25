@@ -1,4 +1,8 @@
 # Edd WiSe
+![Release](https://img.shields.io/github/release/exelr/eddwise.svg)
+![Test](https://github.com/exelr/eddwise/workflows/Test/badge.svg)
+![Security](https://github.com/exelr/eddwise/workflows/Security/badge.svg)
+![Linter](https://github.com/exelr/eddwise/workflows/Linter/badge.svg)
 
 Edd WiSe - **E**vent **d**riven **d**esign over **W**eb **S**ocket - is a tool to design uni or bi-directional event driven web applications.
 
