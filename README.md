@@ -11,7 +11,7 @@
 <br/>
 <p>
 	Edd WiSe - <b>E</b>vent <b>d</b>riven <b>d</b>esign over <b>W</b>eb <b>S</b>ocket<br />
-    A a tool to design uni or bi-directional event driven web applications.
+    A a tool to design uni or bi-directional event driven web applications. <br />
 </p>
 </div>
 
