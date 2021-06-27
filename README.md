@@ -1,3 +1,4 @@
+
 # Edd WiSe
 
 ![Release](https://img.shields.io/github/v/release/exelr/eddwise.svg)
@@ -5,7 +6,16 @@
 ![Security](https://github.com/exelr/eddwise/workflows/Security/badge.svg)
 ![Linter](https://github.com/exelr/eddwise/workflows/Linter/badge.svg)
 
-Edd WiSe - **E**vent **d**riven **d**esign over **W**eb **S**ocket - is a tool to design uni or bi-directional event driven web applications.
+<div>
+<img align="left" src="https://raw.githubusercontent.com/exelr/eddwise/master/logo.png" alt="Edd WiSe" width="100" height="100" />
+<br/>
+<p>
+	Edd WiSe - <b>E</b>vent <b>d</b>riven <b>d</b>esign over <b>W</b>eb <b>S</b>ocket<br />
+    A a tool to design uni or bi-directional event driven web applications.
+</p>
+</div>
+
+## Design First
 
 You can provide a simple description of your service with a subset of Golang syntax,
 and you are able to generate **documented** code of both server (Golang) and client (Javascript), and dummy server/client implementations to be filled with business logic.
@@ -153,3 +163,6 @@ In the future we can use more appropriate DSL to design (jsonschema/protobuf/...
 - GRPC over websocket
 - AsyncAPI with websocket extension
 - WAMP (for the ws not for the design)
+
+
+Logo from [goperhize](https://goperhize.me)
