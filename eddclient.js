@@ -42,7 +42,7 @@ class EddClient {
     connected(){
         for (let i in this.channels) {
             if(this.channels.hasOwnProperty(i)) {
-                if(this.channels[i]._connectedFn() != null) {
+                if(this.channels[i]._connectedFn != null) {
                     this.channels[i]._connectedFn()
                 }
             }
@@ -52,7 +52,7 @@ class EddClient {
     disconnected(){
         for (let i in this.channels) {
             if(this.channels.hasOwnProperty(i)) {
-                if(this.channels[i]._disconnectedFn() != null) {
+                if(this.channels[i]._disconnectedFn != null) {
                     this.channels[i]._disconnectedFn()
                 }
             }

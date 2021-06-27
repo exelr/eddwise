@@ -3,6 +3,7 @@ package eddwise
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,9 @@ import (
 	"sync"
 	"sync/atomic"
 )
+
+//go:embed eddclient.js
+var eddclientJS []byte
 
 func ErrMissingServerHandler(chName, eventName string) error {
 	if len(eventName) == 0 {
@@ -87,6 +91,10 @@ func (s *Server) StartWS(wsPath string, port int) error {
 	app := fiber.New()
 
 	app.Use(wsPath, func(c *fiber.Ctx) error {
+		if bytes.HasSuffix(c.Request().URI().Path(), []byte("/edd.js")) {
+			c.Response().Header.Add("content-type", "application/javascript")
+			return c.Send(eddclientJS)
+		}
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			return c.Next()

@@ -63,6 +63,16 @@ type Field struct {
 	Doc         string
 }
 
+func (f *Field) RawType() string {
+	var arr = strings.LastIndex(f.TypeName, "[]")
+	var typeNoArr = f.TypeName
+
+	if arr > -1 {
+		typeNoArr = typeNoArr[arr+2:]
+	}
+	return typeNoArr
+}
+
 func (f *Field) GoType() string {
 	if f.TypePointer {
 		return "*" + f.TypeName
@@ -102,7 +112,7 @@ func (f *Field) JsType() string {
 	}
 
 	if arr > -1 {
-		typeNoArr = typeNoArr[arr:]
+		typeNoArr = typeNoArr[arr+2:]
 		arrRepeat = arr/2 + 1
 	}
 
@@ -119,7 +129,10 @@ func (f *Field) JsType() string {
 		case "error", "rune", "string":
 			return "string"
 		default:
-			return "object"
+			if strings.HasPrefix(typeNoArr, "map[") {
+				return "object"
+			}
+			return typeNoArr
 		}
 	}
 
@@ -191,7 +204,7 @@ func (design *Design) Parse(filePath string) error {
 			}
 			design.Channels = append(design.Channels, eddCh)
 		case *ast.StructType:
-			var eddSt, err = ParseStruct(t.Name.Name, t.Doc.Text(), tt)
+			var eddSt, err = design.ParseStruct(t.Name.Name, t.Doc.Text(), tt)
 			if err != nil {
 				return fmt.Errorf("unable to parse struct: %w", err)
 			}
@@ -239,9 +252,9 @@ func (design *Design) Validate() error {
 					//builtin
 					continue
 				}
-				def, ok := structs[f.TypeName]
+				def, ok := structs[f.RawType()]
 				if !ok {
-					return fmt.Errorf("unknown type '%s' of field '%s' in struct '%s'", f.TypeName, f.Name, s.Name)
+					return fmt.Errorf("unknown type '%s' of field '%s' in struct '%s'", f.RawType(), f.Name, s.Name)
 				}
 				f.Type = Type{
 					Name: f.TypeName,
@@ -347,7 +360,7 @@ func (design *Design) SkeletonClient(w io.Writer) error {
 {{ end }}
 </div>
 <div id="output"></div>
-<script src="../../eddclient.js"></script>
+<script src="//localhost:3000/{{ .Name }}/edd.js"></script>
 <script src="../../gen/{{ .Name }}/channel.js"></script>
 <script>
   var wsUri = "ws://localhost:3000/{{ .Name }}"
@@ -513,7 +526,7 @@ func (design *Design) GenerateClient(w io.Writer) error {
  * @typedef {{ $struct.Name }}
 {{- range $field := $struct.Fields }}
  * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if $field.TypePointer }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }} {{ $field.Doc | TrimSpace }}
-{{ end -}}
+{{- end }}
 */
 
 {{ end -}}
@@ -690,7 +703,7 @@ func ParseChannel(name, doc string, tt *ast.InterfaceType) (*Channel, error) {
 	}
 	return eddCh, nil
 }
-func ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
+func (design *Design) ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
 	var eddSt = &Struct{
 		Name: name,
 		Doc:  doc,
@@ -711,6 +724,19 @@ func ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
 		switch t := field.Type.(type) {
 		default:
 			return nil, fmt.Errorf("cannot parse field %s in %s struct", fieldname, name)
+		case *ast.ArrayType:
+			idt, ok := t.Elt.(*ast.Ident)
+			if !ok {
+				return nil, fmt.Errorf("cannot parse slice field %s in %s struct", fieldname, name)
+			}
+			typeName = "[]" + idt.Name
+		case *ast.StructType:
+			var subSt, err = design.ParseStruct(field.Names[0].Name, field.Doc.Text(), t)
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse struct field %s in %s struct", fieldname, name)
+			}
+			design.Structs = append(design.Structs, subSt)
+
 		case *ast.MapType:
 			typeName = "map[" + t.Key.(*ast.Ident).Name + "]"
 			tv, ok := t.Value.(*ast.Ident)

@@ -90,7 +90,7 @@ func main(){
 Client:
 ```html
 // web/pingpong/app.html
-<script src="eddclient.js"></script>
+<script src="//localhost:3000/pingpong/edd.js"></script>
 <script src="gen/pingpong/channel.js"></script>
 <script>
     let client = new EddClient("ws://localhost:3000/pingpong")
