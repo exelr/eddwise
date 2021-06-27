@@ -124,6 +124,8 @@ edd pingpong/design skeleton
 
 See [Examples directory](examples).
 
+A full demo of a simple web game is available, see [Filotto](https://github.com/exelr/filotto).
+
 ## Why not pub/sub for an event driven design system ?
 
 Mainly because publish and subscribe adds a layer between channel and events,
