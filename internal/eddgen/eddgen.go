@@ -445,7 +445,7 @@ func (ch *{{ $ch.Name }}) Bind(server *eddwise.Server) error {
 }
 
 func (ch *{{ $ch.Name }}) SetReceiver(chr eddwise.ImplChannel) error {
-	if _, ok := recv.(*{{ $ch.Name }}); !ok {
+	if _, ok := chr.(*{{ $ch.Name }}); !ok {
 		return errors.New("unexpected channel type while SetReceiver on '{{ $ch.Name }}' channel")
 	}
 	ch.recv = chr.({{ $ch.Name }}Recv)
