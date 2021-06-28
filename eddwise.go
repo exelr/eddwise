@@ -76,6 +76,7 @@ type Server struct {
 	ClientAutoInc      uint64
 	Clients            map[uint64]*Client
 	ClientsMx          sync.RWMutex
+	App                *fiber.App
 }
 
 func NewServer() *Server {
@@ -88,9 +89,15 @@ func NewServer() *Server {
 
 func (s *Server) StartWS(wsPath string, port int) error {
 
-	app := fiber.New()
+	if s.App != nil {
+		if err := s.Close(); err != nil {
+			return err
+		}
+	}
 
-	app.Use(wsPath, func(c *fiber.Ctx) error {
+	s.App = fiber.New()
+
+	s.App.Use(wsPath, func(c *fiber.Ctx) error {
 		if bytes.HasSuffix(c.Request().URI().Path(), []byte("/edd.js")) {
 			c.Response().Header.Add("content-type", "application/javascript")
 			return c.Send(eddclientJS)
@@ -102,7 +109,7 @@ func (s *Server) StartWS(wsPath string, port int) error {
 		return fiber.ErrUpgradeRequired
 	})
 
-	app.Get(wsPath, websocket.New(func(c *websocket.Conn) {
+	s.App.Get(wsPath, websocket.New(func(c *websocket.Conn) {
 
 		var client = &Client{
 			Conn:   c,
@@ -172,7 +179,11 @@ func (s *Server) StartWS(wsPath string, port int) error {
 		}
 
 	}))
-	return app.Listen(fmt.Sprintf(":%d", port))
+	return s.App.Listen(fmt.Sprintf(":%d", port))
+}
+
+func (s *Server) Close() error {
+	return s.App.Shutdown()
 }
 
 func (s *Server) Register(ch ImplChannel) error {
@@ -295,7 +306,7 @@ type ImplChannel interface {
 	Bind(*Server) error
 	Route(Context, *Event) error
 	GetServer() *Server
-	SetReceiver(interface{})
+	SetReceiver(ImplChannel) error
 }
 
 type ImplChannelConnected interface {
