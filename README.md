@@ -166,4 +166,4 @@ In the future we can use more appropriate DSL to design (jsonschema/protobuf/...
 - WAMP (for the ws not for the design)
 
 
-Logo from [goperhize](https://goperhize.me)
+Logo from [gopherize.me](https://gopherize.me)
