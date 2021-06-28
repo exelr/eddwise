@@ -194,8 +194,7 @@ func (s *Server) Register(ch ImplChannel) error {
 		return err
 	}
 	s.RegisteredChannels[ch.Name()] = ch
-	ch.SetReceiver(ch)
-	return nil
+	return ch.SetReceiver(ch)
 }
 
 func (s *Server) ProcessEvent(ctx Context, rawEvent []byte) error {
