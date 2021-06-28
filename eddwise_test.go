@@ -3,6 +3,7 @@ package eddwise
 import (
 	"fmt"
 	"golang.org/x/net/websocket"
+	"sync"
 	"testing"
 	"time"
 )
@@ -13,14 +14,31 @@ type TestChannel struct {
 	s            *Server
 	connected    bool
 	disconnected bool
+	mx           sync.RWMutex //required to avoid race detectors
+}
+
+func (ch *TestChannel) GetConnected() bool {
+	ch.mx.RLock()
+	defer ch.mx.RUnlock()
+	return ch.connected
+}
+
+func (ch *TestChannel) GetDisconnected() bool {
+	ch.mx.RLock()
+	defer ch.mx.RUnlock()
+	return ch.disconnected
 }
 
 func (ch *TestChannel) Connected(_ *Client) error {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
 	ch.connected = true
 	return nil
 }
 
 func (ch *TestChannel) Disconnected(_ *Client) error {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
 	ch.disconnected = true
 	return nil
 }
@@ -90,7 +108,7 @@ func TestServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unable to init websocket client: %s\n", err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// send message
 		if err := websocket.JSON.Send(conn, Event{
@@ -127,11 +145,11 @@ func TestServer(t *testing.T) {
 		t.Fatalf("unable to start websocket server: %s\n", err)
 	}
 
-	if !ch.connected {
+	if !ch.GetConnected() {
 		t.Fatalf("Connect() method was not called\n")
 	}
 
-	if !ch.disconnected {
+	if !ch.GetDisconnected() {
 		t.Fatalf("Disconnect() method was not called\n")
 	}
 
