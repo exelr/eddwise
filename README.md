@@ -164,6 +164,6 @@ In the future we can use more appropriate DSL to design (jsonschema/protobuf/...
 - GRPC over websocket
 - AsyncAPI with websocket extension
 - WAMP (for the ws not for the design)
-
+- [Flogo](https://github.com/TIBCOSoftware/flogo)
 
 Logo from [gopherize.me](https://gopherize.me)
