@@ -128,21 +128,40 @@ func gen() {
 	}
 
 	if genCodeServerPath != "-" {
-		var serverPath = genCodeServerPath + "/" + design.Name
-		if err := os.MkdirAll(serverPath, os.ModePerm); err != nil && os.IsExist(err) {
-			log.Fatalln("unable to create server path for code generation:", err)
-		}
-		var fileName = serverPath + "/channel.go"
-		fmt.Println(fileName)
-		serverWriter, err := os.Create(fileName)
-		if err != nil {
-			log.Fatalln("unable to write server file:", err)
-		}
+		{
+			var serverPath = genCodeServerPath + "/" + design.Name
+			if err := os.MkdirAll(serverPath, os.ModePerm); err != nil && os.IsExist(err) {
+				log.Fatalln("unable to create server path for code generation:", err)
+			}
+			var fileName = serverPath + "/channel.go"
+			fmt.Println(fileName)
+			serverWriter, err := os.Create(fileName)
+			if err != nil {
+				log.Fatalln("unable to write server file:", err)
+			}
 
-		if err := design.GenerateServer(serverWriter); err != nil {
-			log.Fatalln(err)
+			if err := design.GenerateServer(serverWriter); err != nil {
+				log.Fatalln(err)
+			}
+			_ = serverWriter.Close()
 		}
-		_ = serverWriter.Close()
+		{
+			var serverPath = genCodeServerPath + "/" + design.Name + "/behave"
+			if err := os.MkdirAll(serverPath, os.ModePerm); err != nil && os.IsExist(err) {
+				log.Fatalln("unable to create server test path for code generation:", err)
+			}
+			var fileName = serverPath + "/channel.go"
+			fmt.Println(fileName)
+			serverTestWriter, err := os.Create(fileName)
+			if err != nil {
+				log.Fatalln("unable to write server test file:", err)
+			}
+
+			if err := design.GenerateServerTest(serverTestWriter); err != nil {
+				log.Fatalln(err)
+			}
+			_ = serverTestWriter.Close()
+		}
 	}
 
 	if genCodeClientPath != "-" {

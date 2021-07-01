@@ -11,7 +11,7 @@ import (
 var _ ImplChannel = (*TestChannel)(nil)
 
 type TestChannel struct {
-	s            *Server
+	s            Server
 	connected    bool
 	disconnected bool
 	mx           sync.RWMutex //required to avoid race detectors
@@ -29,14 +29,14 @@ func (ch *TestChannel) GetDisconnected() bool {
 	return ch.disconnected
 }
 
-func (ch *TestChannel) Connected(_ *Client) error {
+func (ch *TestChannel) Connected(_ *ClientSocket) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	ch.connected = true
 	return nil
 }
 
-func (ch *TestChannel) Disconnected(_ *Client) error {
+func (ch *TestChannel) Disconnected(_ *ClientSocket) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	ch.disconnected = true
@@ -50,12 +50,12 @@ func (ch *TestChannel) SetReceiver(recv ImplChannel) error {
 	return nil
 }
 
-func (ch *TestChannel) Bind(s *Server) error {
+func (ch *TestChannel) Bind(s Server) error {
 	ch.s = s
 	return nil
 }
 
-func (ch *TestChannel) GetServer() *Server {
+func (ch *TestChannel) GetServer() Server {
 	return ch.s
 }
 
@@ -63,7 +63,13 @@ func (ch *TestChannel) Name() string {
 	return "test"
 }
 
-func (ch *TestChannel) Route(ctx Context, event *Event) error {
+type TestResponse string
+
+func (TestResponse) GetEventName() string {
+	return "testResponse"
+}
+
+func (ch *TestChannel) Route(ctx Context, event *EventMessage) error {
 	if event.Channel != ch.Name() {
 		return fmt.Errorf("unexpected channel name '%s', expecting '%s'", event.Channel, ch.Name())
 	}
@@ -79,7 +85,7 @@ func (ch *TestChannel) Route(ctx Context, event *Event) error {
 		return fmt.Errorf("unexpected value for body: %s, expecting \"A\"", event.Body)
 	}
 
-	if err := ctx.GetClient().Send("test", "testResponse", "B"); err != nil {
+	if err := ctx.GetClient().Send("test", TestResponse("B")); err != nil {
 		panic(fmt.Errorf("cannot send response to client: %w", err))
 	}
 
@@ -111,7 +117,7 @@ func TestServer(t *testing.T) {
 		defer func() { _ = conn.Close() }()
 
 		// send message
-		if err := websocket.JSON.Send(conn, Event{
+		if err := websocket.JSON.Send(conn, EventMessage{
 			Channel: "test",
 			Name:    "testRequest",
 			Body:    []byte("\"A\""),
@@ -119,7 +125,7 @@ func TestServer(t *testing.T) {
 			t.Fatalf("unable to send message through socket: %s\n", err)
 		}
 
-		var response = Event{}
+		var response = EventMessage{}
 
 		if err := websocket.JSON.Receive(conn, &response); err != nil {
 			// handle error

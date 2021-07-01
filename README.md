@@ -98,7 +98,7 @@ func main(){
 }
 
 ```
-Client:
+ClientSocket:
 ```html
 // web/pingpong/app.html
 <script src="//localhost:3000/pingpong/edd.js"></script>
@@ -141,7 +141,7 @@ A full demo of a simple web game is available, see [Filotto](https://github.com/
 
 Mainly because publish and subscribe adds a layer between channel and events,
 in particular for any defined event you have to associate it to at least a publish or a subscription (to make sense of its existence).
-Instead Edd WiSe define a channel and messages that can go trough the channel, associating to the message an optional direction (Server->Client or Client->Server).
+Instead Edd WiSe define a channel and messages that can go trough the channel, associating to the message an optional direction (Server->ClientSocket or ClientSocket->Server).
 So the actual relation of "publish" and "subscribe" (or both) is an explicit design direction (or the lack of it) of the event in the channel.
 
 Take the example of pingpong service above:

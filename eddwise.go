@@ -25,28 +25,36 @@ func ErrMissingServerHandler(chName, eventName string) error {
 	return fmt.Errorf("handler for event '%s' on channel '%s' was not expected", eventName, chName)
 }
 
-type Client struct {
-	id      uint64
-	Server  *Server
-	Conn    *websocket.Conn
-	WriteMx sync.Mutex
-	Closed  bool
+type Client interface {
+	GetId() uint64
+	Send(channel string, event Event) error
+	SendJSON(interface{}) error
+	Close() error
+	Closed() bool
 }
 
-func (c *Client) GetId() uint64 {
+type ClientSocket struct {
+	id      uint64
+	Server  *ServerSocket
+	Conn    *websocket.Conn
+	WriteMx sync.Mutex
+	closed  bool
+}
+
+func (c *ClientSocket) GetId() uint64 {
 	return c.id
 }
 
-func (c *Client) Send(channel, name string, body interface{}) error {
-	if c.Closed {
+func (c *ClientSocket) Send(channel string, event Event) error {
+	if c.closed {
 		return errors.New("writing to closed client")
 	}
-	var evt = &Event{
+	var evt = &EventMessage{
 		Channel: channel,
-		Name:    name,
+		Name:    event.GetEventName(),
 	}
 	var err error
-	evt.Body, err = c.Server.Serializer.Serialize(body)
+	evt.Body, err = c.Server.Serializer.Serialize(event)
 	if err != nil {
 		return err
 	}
@@ -63,31 +71,68 @@ func (c *Client) Send(channel, name string, body interface{}) error {
 	return nil
 }
 
-func (c *Client) SendJSON(v interface{}) error {
+func (c *ClientSocket) SendJSON(v interface{}) error {
 	c.WriteMx.Lock()
 	defer c.WriteMx.Unlock()
 	return c.Conn.WriteJSON(v)
 }
 
-type Server struct {
+func (c *ClientSocket) Closed() bool {
+	return c.closed
+}
+
+func (c *ClientSocket) Close() error {
+	c.closed = true
+	return c.Conn.Close()
+}
+
+type Server interface {
+	AddClient(Client)
+	GetClients(...uint64) []Client
+	GetClient(uint64) Client
+	RemoveClient(Client)
+	GetSerializer() Serializer
+}
+
+var _ Server = (*ServerSocket)(nil)
+
+type ServerSocket struct {
 	Conn               net.Conn
 	RegisteredChannels map[string]ImplChannel
 	Serializer         Serializer
 	ClientAutoInc      uint64
-	Clients            map[uint64]*Client
+	Clients            map[uint64]Client
 	ClientsMx          sync.RWMutex
 	App                *fiber.App
 }
 
-func NewServer() *Server {
-	return &Server{
+func NewServer() *ServerSocket {
+	return &ServerSocket{
 		Serializer:         &JsonSerializer{},
 		RegisteredChannels: make(map[string]ImplChannel),
-		Clients:            make(map[uint64]*Client),
+		Clients:            make(map[uint64]Client),
 	}
 }
 
-func (s *Server) StartWS(wsPath string, port int) error {
+func (s *ServerSocket) AddClient(c Client) {
+	s.ClientsMx.Lock()
+	defer s.ClientsMx.Unlock()
+	s.Clients[c.GetId()] = c
+}
+
+func (s *ServerSocket) GetClient(id uint64) Client {
+	s.ClientsMx.RLock()
+	defer s.ClientsMx.RUnlock()
+	return s.Clients[id]
+}
+
+func (s *ServerSocket) RemoveClient(c Client) {
+	s.ClientsMx.Lock()
+	defer s.ClientsMx.Unlock()
+	delete(s.Clients, c.GetId())
+}
+
+func (s *ServerSocket) StartWS(wsPath string, port int) error {
 
 	if s.App != nil {
 		if err := s.Close(); err != nil {
@@ -111,7 +156,7 @@ func (s *Server) StartWS(wsPath string, port int) error {
 
 	s.App.Get(wsPath, websocket.New(func(c *websocket.Conn) {
 
-		var client = &Client{
+		var client = &ClientSocket{
 			Conn:   c,
 			Server: s,
 			id:     atomic.AddUint64(&s.ClientAutoInc, 1),
@@ -121,7 +166,7 @@ func (s *Server) StartWS(wsPath string, port int) error {
 		for _, ch := range s.RegisteredChannels {
 			if connRecv, ok := ch.(ImplChannelConnected); ok {
 				if err := connRecv.Connected(client); err != nil {
-					var ee = Event{
+					var ee = EventMessage{
 						Channel: "errors",
 						Name:    "error",
 					}
@@ -134,14 +179,10 @@ func (s *Server) StartWS(wsPath string, port int) error {
 			}
 		}
 
-		s.ClientsMx.Lock()
-		s.Clients[client.id] = client
-		s.ClientsMx.Unlock()
+		s.AddClient(client)
 
 		defer func() {
-			s.ClientsMx.Lock()
-			delete(s.Clients, client.id)
-			s.ClientsMx.Unlock()
+			s.RemoveClient(client)
 		}()
 
 		defer func() {
@@ -161,12 +202,12 @@ func (s *Server) StartWS(wsPath string, port int) error {
 		for {
 			if _, msg, err = c.ReadMessage(); err != nil {
 				log.Println("read:", err)
-				client.Closed = true
+				_ = client.Close()
 				break
 			}
 
 			if err := s.ProcessEvent(ctx, msg); err != nil {
-				var ee = Event{
+				var ee = EventMessage{
 					Channel: "errors",
 					Name:    "error",
 				}
@@ -182,11 +223,11 @@ func (s *Server) StartWS(wsPath string, port int) error {
 	return s.App.Listen(fmt.Sprintf(":%d", port))
 }
 
-func (s *Server) Close() error {
+func (s *ServerSocket) Close() error {
 	return s.App.Shutdown()
 }
 
-func (s *Server) Register(ch ImplChannel) error {
+func (s *ServerSocket) Register(ch ImplChannel) error {
 	if _, ok := s.RegisteredChannels[ch.Name()]; ok {
 		return fmt.Errorf("channel '%s' is already registered", ch.Name())
 	}
@@ -197,8 +238,8 @@ func (s *Server) Register(ch ImplChannel) error {
 	return ch.SetReceiver(ch)
 }
 
-func (s *Server) ProcessEvent(ctx Context, rawEvent []byte) error {
-	var event = &Event{}
+func (s *ServerSocket) ProcessEvent(ctx Context, rawEvent []byte) error {
+	var event = &EventMessage{}
 	if err := s.Serializer.Deserialize(rawEvent, event); err != nil {
 		return err
 	}
@@ -213,14 +254,14 @@ func (s *Server) ProcessEvent(ctx Context, rawEvent []byte) error {
 	return ch.Route(ctx, event)
 }
 
-func (s *Server) GetClients(exclude ...uint64) []*Client {
+func (s *ServerSocket) GetClients(exclude ...uint64) []Client {
 	s.ClientsMx.RLock()
 	defer s.ClientsMx.RUnlock()
-	var ret = make([]*Client, 0, len(s.Clients))
+	var ret = make([]Client, 0, len(s.Clients))
 for1:
 	for _, c := range s.Clients {
 		for _, e := range exclude {
-			if e == c.id {
+			if e == c.GetId() {
 				continue for1
 			}
 		}
@@ -229,7 +270,11 @@ for1:
 	return ret
 }
 
-func (s *Server) Broadcast(channel, name string, body interface{}, clients []*Client) error {
+func (s *ServerSocket) GetSerializer() Serializer {
+	return s.Serializer
+}
+
+func Broadcast(channel string, event Event, clients []Client) error {
 	var errCh = make(chan error, 1)
 	var errs []error
 	var wgErr sync.WaitGroup
@@ -243,8 +288,8 @@ func (s *Server) Broadcast(channel, name string, body interface{}, clients []*Cl
 	var wg sync.WaitGroup
 	for _, c := range clients {
 		wg.Add(1)
-		go func(c *Client) {
-			if err := c.Send(channel, name, body); err != nil {
+		go func(c Client) {
+			if err := c.Send(channel, event); err != nil {
 				errCh <- err
 			}
 			wg.Done()
@@ -266,35 +311,42 @@ func (s *Server) Broadcast(channel, name string, body interface{}, clients []*Cl
 
 type Context interface {
 	context.Context
-	GetServer() *Server
-	GetClient() *Client
+	GetServer() Server
+	GetClient() Client
 }
 
 type DefaultContext struct {
 	context.Context
-	server *Server
-	client *Client
+	server Server
+	client Client
 }
 
-func NewDefaultContext(ctx context.Context, server *Server, client *Client) *DefaultContext {
+func NewDefaultContext(ctx context.Context, server Server, client Client) *DefaultContext {
 	return &DefaultContext{
 		Context: ctx,
 		server:  server,
 		client:  client,
 	}
 }
+func NewDefaultContextFromBackground(server Server, client Client) *DefaultContext {
+	return &DefaultContext{
+		Context: context.Background(),
+		server:  server,
+		client:  client,
+	}
+}
 
-func (ctx *DefaultContext) GetServer() *Server {
+func (ctx *DefaultContext) GetServer() Server {
 	return ctx.server
 }
 
-func (ctx *DefaultContext) GetClient() *Client {
+func (ctx *DefaultContext) GetClient() Client {
 	return ctx.client
 }
 
-type EventHandler func(Context, *Event) error
+type EventHandler func(Context, *EventMessage) error
 
-type Event struct {
+type EventMessage struct {
 	Channel string          `json:"channel"`
 	Name    string          `json:"name"`
 	Body    json.RawMessage `json:"body"`
@@ -302,16 +354,26 @@ type Event struct {
 
 type ImplChannel interface {
 	Name() string
-	Bind(*Server) error
-	Route(Context, *Event) error
-	GetServer() *Server
+	Bind(Server) error
+	Route(Context, *EventMessage) error
+	GetServer() Server
 	SetReceiver(ImplChannel) error
 }
 
 type ImplChannelConnected interface {
-	Connected(*Client) error
+	Connected(Client) error
 }
 
 type ImplChannelDisconnected interface {
-	Disconnected(*Client) error
+	Disconnected(Client) error
+}
+
+type TestableChannel interface {
+	ImplChannel
+	Given(ImplChannel)
+	Expect(TestableChannel)
+}
+
+type Event interface {
+	GetEventName() string
 }

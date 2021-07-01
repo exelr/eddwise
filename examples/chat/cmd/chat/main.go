@@ -28,14 +28,24 @@ func (ch *ChatChannel) GetName(id uint64) string {
 	defer ch.mx.RUnlock()
 	return ch.users[id]
 }
+func (ch *ChatChannel) SetName(id uint64, name string) {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
+	ch.users[id] = name
+}
 
-func (ch *ChatChannel) Connected(c *eddwise.Client) error {
+func (ch *ChatChannel) RemoveUser(id uint64) {
+	ch.mx.Lock()
+	defer ch.mx.Unlock()
+	delete(ch.users, id)
+}
+
+func (ch *ChatChannel) Connected(c eddwise.Client) error {
 	fmt.Println("User connected", c.GetId())
 	var name = randomdata.SillyName()
-	ch.mx.Lock()
-	ch.users[c.GetId()] = name
-	ch.mx.Unlock()
-	_ = ch.BroadcastUserEnter(ch.GetServer().GetClients(c.GetId()), &chat.UserEnter{
+	ch.SetName(c.GetId(), name)
+	var server = ch.GetServer()
+	_ = ch.BroadcastUserEnter(server.GetClients(c.GetId()), &chat.UserEnter{
 		UserId: c.GetId(),
 		Name:   name,
 	})
@@ -51,11 +61,9 @@ func (ch *ChatChannel) Connected(c *eddwise.Client) error {
 	return nil
 }
 
-func (ch *ChatChannel) Disconnected(c *eddwise.Client) error {
+func (ch *ChatChannel) Disconnected(c eddwise.Client) error {
 	fmt.Println("User disconnected", c.GetId(), ch.GetName(c.GetId()))
-	ch.mx.Lock()
-	delete(ch.users, c.GetId())
-	ch.mx.Unlock()
+	ch.RemoveUser(c.GetId())
 
 	_ = ch.BroadcastUserLeft(ch.GetServer().GetClients(c.GetId()), &chat.UserLeft{
 		UserId: c.GetId(),
@@ -64,11 +72,11 @@ func (ch *ChatChannel) Disconnected(c *eddwise.Client) error {
 	return nil
 }
 
-func (ch *ChatChannel) OnMessage(ctx chat.ChatContext, evt *chat.Message) error {
+func (ch *ChatChannel) OnMessage(ctx eddwise.Context, evt *chat.Message) error {
 	fmt.Println("Received message from", ctx.GetClient().GetId(), ":", evt.Text)
 	var targets = ctx.GetServer().GetClients(ctx.GetClient().GetId())
 	var id = ctx.GetClient().GetId()
-	_ = ctx.GetChannel().BroadcastMessage(targets, &chat.Message{
+	_ = ch.BroadcastMessage(targets, &chat.Message{
 		UserId: &id,
 		Text:   evt.Text,
 	})
@@ -76,11 +84,12 @@ func (ch *ChatChannel) OnMessage(ctx chat.ChatContext, evt *chat.Message) error 
 	//return ctx.GetChannel().Send(ctx.GetClient(), &pingpong.Pong{ID: ping.ID})
 }
 
-func (ch *ChatChannel) OnChangeName(ctx chat.ChatContext, evt *chat.ChangeName) error {
+func (ch *ChatChannel) OnChangeName(ctx eddwise.Context, evt *chat.ChangeName) error {
 	fmt.Println("Received change name from", ctx.GetClient().GetId(), ":", evt.Name)
+	ch.SetName(ctx.GetClient().GetId(), evt.Name)
 	var targets = ctx.GetServer().GetClients(ctx.GetClient().GetId())
 	var id = ctx.GetClient().GetId()
-	_ = ctx.GetChannel().BroadcastChangeName(targets, &chat.ChangeName{
+	_ = ch.BroadcastChangeName(targets, &chat.ChangeName{
 		UserId: &id,
 		Name:   evt.Name,
 	})
