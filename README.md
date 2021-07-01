@@ -21,6 +21,11 @@
 You can provide a simple description of your service with a subset of Golang syntax,
 and you are able to generate **documented** code of both server (Golang) and client (Javascript), and dummy server/client implementations to be filled with business logic.
 
+## Behavioural Second
+
+Speaking about events, it is natural to think how an event would influence the state of your application and of your remote clients.
+
+Also, with the server code, the generation tool provides you with a "behave" interface that let you to naturally implement BDD scenarios thanks to a leveraging of [goconvey](https://github.com/smartystreets/goconvey) around your defined events.
 
 ## Install
 
