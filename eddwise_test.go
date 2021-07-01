@@ -29,14 +29,14 @@ func (ch *TestChannel) GetDisconnected() bool {
 	return ch.disconnected
 }
 
-func (ch *TestChannel) Connected(_ *ClientSocket) error {
+func (ch *TestChannel) Connected(_ Client) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	ch.connected = true
 	return nil
 }
 
-func (ch *TestChannel) Disconnected(_ *ClientSocket) error {
+func (ch *TestChannel) Disconnected(_ Client) error {
 	ch.mx.Lock()
 	defer ch.mx.Unlock()
 	ch.disconnected = true
