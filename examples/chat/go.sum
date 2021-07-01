@@ -2,6 +2,8 @@ github.com/Pallinder/go-randomdata v1.2.0 h1:DZ41wBchNRb/0GfsePLiSwb0PHZmT67XY00
 github.com/Pallinder/go-randomdata v1.2.0/go.mod h1:yHmJgulpD2Nfrm0cR9tI/+oAgRqCQQixsA8HyRZfV9Y=
 github.com/andybalholm/brotli v1.0.2 h1:JKnhI/XQ75uFBTiuzXpzFrUriDPiZjlOSzh6wXogP0E=
 github.com/andybalholm/brotli v1.0.2/go.mod h1:loMXtMfwqflxFJPmdbJO0a3KNoPuLBgiu3qAvBg8x/Y=
+github.com/exelr/eddwise v0.1.4 h1:nRlnrYJKn4mtzuf9SUp1xS6Uz/syT+9Whx66e7Un6VM=
+github.com/exelr/eddwise v0.1.4/go.mod h1:VofPv/sIlRYPh7dhoJX8R8yR1kNdlV8uvEvwLFxRK9E=
 github.com/fasthttp/websocket v0.0.0-20200320073529-1554a54587ab h1:9e2joQGp642wHGFP5m86SDptAavrdGBe8/x9DGEEAaI=
 github.com/fasthttp/websocket v0.0.0-20200320073529-1554a54587ab/go.mod h1:smsv/h4PBEBaU0XDTY5UwJTpZv69fQ0FfcLJr21mA6Y=
 github.com/gofiber/fiber/v2 v2.12.0 h1:R7FVMs9mtMREjfCzCioh2j8RHwhz0/H+X0rH6BpBkJ4=
