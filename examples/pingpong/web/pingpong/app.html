@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,59 +6,37 @@
     <title>pingpong</title>
 </head>
 <body>
-<button onclick="toggleClientPing()">Enable/Disable client ping</button>
+<div id="controls">
+
+</div>
 <div id="output"></div>
 <script src="//localhost:3000/pingpong/edd.js"></script>
 <script src="../../gen/pingpong/channel.js"></script>
 <script>
-  var pingId = 0
   var wsUri = "ws://localhost:3000/pingpong"
   var client = new EddClient(wsUri)
-  var ch = new PingPongChannel()
-  client.register(ch)
 
-  ch.onPing(function (event){
-      ch.sendPong({
-          id: event.id
-      })
-      document.getElementById("output").innerHTML += "Ping request with id " + event.id + " received, pong sent<br>"
+  var chpingpong = new pingpongChannel()
+
+  chpingpong.onping(function (ping){
+      document.getElementById("output").innerHTML += "[pingpong] Event 'ping' received: " + JSON.stringify(ping) + "<br>"
+      chpingpong.sendpong({id:ping.id})
   })
 
-  ch.onPong(function (event){
-    document.getElementById("output").innerHTML += "Pong with id " + event.id + " received<br>"
+  chpingpong.connected(function(){
+      document.getElementById("output").innerHTML += "[pingpong] <span style='color: darkgreen'>Connected</span><br>"
   })
 
-  var interval;
-  ch.connected(function(){
-      document.getElementById("output").innerHTML += "<span style='color:darkgreen'>Connected</span><br>"
+  chpingpong.disconnected(function(){
+      document.getElementById("output").innerHTML += "[pingpong] <span style='color: darkred'>Disconnected</span><br>"
   })
 
-  function toggleClientPing(){
-      if(interval == null) {
-          interval = setInterval(function () {
-              ++pingId
-              ch.sendPing({
-                  id: pingId
-              })
-              document.getElementById("output").innerHTML += "Ping with id " + pingId + " sent<br>"
+  client.register(chpingpong)
 
-          }, 1000)
-      } else {
-          clearInterval(interval)
-          interval = null
-      }
-  }
-
-  ch.disconnected(function(){
-      if(interval != null) {
-          clearInterval(interval)
-          interval = null
-      }
-      document.getElementById("output").innerHTML += "<span style='color:red'>Disconnected</span><br>"
-  })
 
   client.start()
 
 </script>
 </body>
 </html>
+

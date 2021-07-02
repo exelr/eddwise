@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/exelr/eddwise"
 	"testing"
+	"time"
 
 	"github.com/smartystreets/goconvey/convey"
 )
@@ -118,6 +119,15 @@ func (cb *ChannelBehave) On(clientId uint64, onEvt func(ctx eddwise.Context) err
 	convey.Convey(fmt.Sprintf("On event %s - %+v", evt.GetEventName(), evt), func() {
 		var err = onEvt(ctx)
 		convey.So(err, convey.ShouldBeNil)
+		if len(f) > 0 {
+			f[0]()
+		}
+	})
+}
+
+func (cb *ChannelBehave) Waiting(duration time.Duration, f ...func()) {
+	convey.Convey(fmt.Sprintf("waiting for %s", duration.String()), func() {
+		time.Sleep(duration)
 		if len(f) > 0 {
 			f[0]()
 		}

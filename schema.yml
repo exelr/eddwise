@@ -1,0 +1,43 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://github.com/exelr/eddwise/schema.yml"
+type: object
+required:
+  - namespace
+properties:
+  namespace:
+    type: string
+  structs:
+    type: object
+    patternProperties:
+      ".*":
+        type: object
+        additionalProperties: false
+        properties:
+          fields:
+            type: object
+            patternProperties:
+              ".*":
+                anyOf:
+                  - enum:
+                    - int
+                    - uint
+                    - string
+                    - "[]byte"
+                  - type: string
+                    enum:
+                      $data: "/structs#"
+  channels:
+    type: object
+    patternProperties:
+      ".*":
+        type: object
+        additionalProperties: false
+        required:
+          - enable
+        properties:
+          enable:
+            type: array
+            items:
+              type: string
+              enum:
+                $data: "/structs#"

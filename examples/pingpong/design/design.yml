@@ -1,0 +1,14 @@
+namespace: pingpong
+structs:
+  ping: # ping is emitted from server
+    fields:
+      id: uint # the id of the ping
+  pong: # after a ping, a pong is sent from client
+    fields:
+      id: uint # the id of the pong, same as the id of the received ping
+
+channels:
+  pingpong:
+    enable:
+      - !!server ping
+      - !!client pong

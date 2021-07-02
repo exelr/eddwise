@@ -1,4 +1,4 @@
-module pingpong
+module pingpongyaml
 
 go 1.16
 

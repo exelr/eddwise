@@ -94,36 +94,13 @@ func GetModuleName() string {
 }
 
 func gen() {
-	var filesName []string
-	var err = filepath.Walk(designPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		var ext string
-		if len(path) > 7 {
-			ext = path[len(path)-7:]
-		}
-		if ext == ".edd.go" {
-			filesName = append(filesName, path)
-		}
-		return nil
-	})
-
+	var filesName, err = getValidFilesInDesignPath()
 	if err != nil {
-		log.Fatalf("unable to open directory %s: %s\n", designPath, err)
+		log.Fatalln(err)
 	}
 
-	if len(filesName) == 0 {
-		log.Fatalf("no .edd.go files found in specified design path\n")
-	}
-	if len(filesName) > 1 {
-		log.Fatalf("the actual version does not support multiple file parsing\n") //todo
-	}
-
-	var filePath = filesName[0]
-
-	var design = eddgen.NewDesign(moduleName)
-	if err := design.ParseAndValidate(filePath); err != nil {
+	design, err := eddgen.ParseAndValidateYamls(moduleName, filesName...)
+	if err != nil {
 		log.Fatalln(err)
 	}
 
@@ -184,60 +161,86 @@ func gen() {
 	}
 }
 
-func skeleton() {
+func getValidFilesInDesignPath() ([]string, error) {
 	var filesName []string
 	var err = filepath.Walk(designPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
 		var ext string
-		if len(path) > 7 {
-			ext = path[len(path)-7:]
+		if len(path) > 8 {
+			ext = path[len(path)-8:]
 		}
-		if ext == ".edd.go" {
+		if ext == ".edd.yml" {
 			filesName = append(filesName, path)
 		}
 		return nil
 	})
 
 	if err != nil {
-		log.Fatalf("unable to open directory %s: %s\n", designPath, err)
+		return nil, fmt.Errorf("unable to open directory %s: %s\n", designPath, err)
 	}
 
 	if len(filesName) == 0 {
-		log.Fatalf("no .edd.go files found in specified design path\n")
+		return nil, fmt.Errorf("no .edd.yml files found in specified design path\n")
 	}
-	if len(filesName) > 1 {
-		log.Fatalf("the actual version does not support multiple file parsing\n") //todo
-	}
+	return filesName, nil
+}
 
-	var filePath = filesName[0]
+func skeleton() {
+	var filesName, err = getValidFilesInDesignPath()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	if len(moduleName) == 0 {
 		log.Fatalln("you have to provide a module name to generate skeleton, use go.mod file or -mod flag")
 	}
 
-	var design = eddgen.NewDesign(moduleName)
-	if err := design.ParseAndValidate(filePath); err != nil {
+	design, err := eddgen.ParseAndValidateYamls(moduleName, filesName...)
+	if err != nil {
 		log.Fatalln(err)
 	}
 
 	if genCodeServerPath != "-" {
-		var serverPath = genCodeServerPath + "/" + design.Name
-		if err := os.MkdirAll(serverPath, os.ModePerm); err != nil && os.IsExist(err) {
-			log.Fatalln("unable to create server path for skeleton generation:", err)
+		var serverMainPath = genCodeServerPath + "/" + design.Name
+		if err := os.MkdirAll(serverMainPath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton main generation:", err)
 		}
-		var fileName = serverPath + "/main.go"
-		fmt.Println(fileName)
-		serverWriter, err := os.Create(fileName)
+		var fileNameMain = serverMainPath + "/main.go"
+		fmt.Println(fileNameMain)
+		serverMainWriter, err := os.Create(fileNameMain)
 		if err != nil {
-			log.Fatalln("unable to write server file:", err)
+			log.Fatalln("unable to write server main file:", err)
 		}
 
-		if err := design.SkeletonServer(serverWriter); err != nil {
+		var serverPackagePath = "internal/" + design.Name
+		if err := os.MkdirAll(serverPackagePath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton package generation:", err)
+		}
+		var fileNamePackage = serverPackagePath + "/" + design.Name + ".go"
+		fmt.Println(fileNamePackage)
+		serverPackageWriter, err := os.Create(fileNamePackage)
+		if err != nil {
+			log.Fatalln("unable to write server package file:", err)
+		}
+
+		var serverPackageTestPath = "internal/" + design.Name
+		if err := os.MkdirAll(serverPackageTestPath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton package test generation:", err)
+		}
+		var fileNamePackageTest = serverPackageTestPath + "/" + design.Name + "_test.go"
+		fmt.Println(fileNamePackageTest)
+		serverPackageTestWriter, err := os.Create(fileNamePackageTest)
+		if err != nil {
+			log.Fatalln("unable to write server package test file:", err)
+		}
+
+		if err := design.SkeletonServer(serverMainWriter, serverPackageWriter, serverPackageTestWriter); err != nil {
 			log.Fatalln(err)
 		}
-		_ = serverWriter.Close()
+		_ = serverMainWriter.Close()
+		_ = serverPackageWriter.Close()
 	}
 
 	if genCodeClientPath != "-" {
