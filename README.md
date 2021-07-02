@@ -39,6 +39,7 @@ go install github.com/exelr/eddwise/cmd/edd
 
 Define your design:
 ```yaml
+# design/pingpong.edd.yml
 namespace: pingpong # the namespace of your generated code (packages for go)
 structs:
   ping: # ping is emitted from server
@@ -58,7 +59,7 @@ channels:
 Generate the code:
 
 ```shell
-edd pingpong/design gen
+edd design gen
 ```
 
 ## Simple library
@@ -79,13 +80,13 @@ type PingPongChannel struct {
     pingpong.PingPong
 }
 
-func (ch *PingPongChannel) OnPing(ctx *pingpong.PingPongContext, ping *pingpong.Ping) error {
+func (ch *PingPongChannel) OnPing(ctx eddwise.Context, ping *pingpong.Ping) error {
     return ch.SendPong(ctx.GetClient(), &pingpong.Pong{Id: ping.Id})
 }
 
 func main(){
     var server = eddwise.NewServer()
-    var ch = &PingPongChannel{}
+    var ch = &NewPingPongChannel{}
     if err := server.Register(ch); err != nil {
         log.Fatalln("unable to register service PingPong: ", err)
     }
