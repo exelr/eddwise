@@ -7,144 +7,9 @@ import (
 	"go/token"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"text/template"
 )
-
-type Direction string
-
-const (
-	ServerToClient = "ServerToClient"
-	ClientToServer = "ClientToServer"
-)
-
-type Channel struct {
-	Name       string
-	Doc        string
-	Enabled    []string
-	Directions map[Direction]map[string]bool
-}
-
-func (c *Channel) EnabledMap() map[string]bool {
-	var ret = make(map[string]bool)
-	for _, k := range c.Enabled {
-		ret[k] = true
-	}
-	return ret
-}
-
-func (c *Channel) GetDirectionEvents(direction Direction) map[string]bool {
-	var available = c.EnabledMap()
-	var revDirection Direction = ClientToServer
-	if direction == ClientToServer {
-		revDirection = ServerToClient
-	}
-	if c.Directions[revDirection] == nil {
-		return available
-	}
-	var events = c.Directions[revDirection]
-	for k := range events {
-		delete(available, k)
-	}
-	return available
-}
-
-type Type struct {
-	Name string
-	Def  *Struct //if Def is nil then it is a primitive
-}
-
-type Field struct {
-	Name        string
-	TypeName    string
-	TypePointer bool
-	Type        Type
-	Doc         string
-}
-
-func (f *Field) RawType() string {
-	var arr = strings.LastIndex(f.TypeName, "[]")
-	var typeNoArr = f.TypeName
-
-	if arr > -1 {
-		typeNoArr = typeNoArr[arr+2:]
-	}
-	return typeNoArr
-}
-
-func (f *Field) GoType() string {
-	if f.TypePointer {
-		return "*" + f.TypeName
-	}
-	return f.TypeName
-}
-
-func (f *Field) GoName() string {
-	return strings.Title(f.Name)
-}
-
-func (f *Field) GoAnnotation() string {
-	if f.TypePointer {
-		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.Name)
-	}
-	return fmt.Sprintf("`json:\"%s\"`", f.Name)
-}
-
-func (f *Field) HasDoc() bool {
-	return len(f.Doc) > 0
-}
-func (f *Field) GoDoc() string {
-	if f.HasDoc() {
-		var docWithCorrectFieldName = regexp.MustCompile("\\b"+f.Name+"\\b").ReplaceAllString(f.Doc, f.GoName())
-		return fmt.Sprintf("// %s", strings.TrimSpace(docWithCorrectFieldName))
-	}
-	return ""
-}
-
-func (f *Field) JsType() string {
-	var arr = strings.LastIndex(f.TypeName, "[]")
-	var arrRepeat = 0
-	var typeNoArr = f.TypeName
-
-	if f.Type.Def != nil {
-		return typeNoArr + strings.Repeat("[]", arrRepeat)
-	}
-
-	if arr > -1 {
-		typeNoArr = typeNoArr[arr+2:]
-		arrRepeat = arr/2 + 1
-	}
-
-	var jsPrimitive = func(t string) string {
-		switch t {
-		case "bool":
-			return "boolean"
-		case "byte", "uint", "uint16", "uint32", "uint64", "uint8", "uintptr":
-			return "uint"
-		case "int", "int16", "int32", "int64", "int8":
-			return "int"
-		case "float32", "float64":
-			return "float"
-		case "error", "rune", "string":
-			return "string"
-		default:
-			if strings.HasPrefix(typeNoArr, "map[") {
-				return "object"
-			}
-			return typeNoArr
-		}
-	}
-
-	return jsPrimitive(typeNoArr) + strings.Repeat("[]", arrRepeat)
-
-}
-
-type Struct struct {
-	Name   string
-	Fields []Field
-	Doc    string
-}
 
 type Design struct {
 	Module   string
@@ -163,6 +28,7 @@ func (design *Design) ParseAndValidate(filePath string) error {
 	}
 	return design.Validate()
 }
+
 func (design *Design) Parse(filePath string) error {
 
 	file, err := os.Open(filePath)
@@ -295,23 +161,23 @@ import (
 )
 
 {{ range $ch := .Channels }}
-type {{ $ch.Name }}Channel struct {
-	{{ $Name }}.{{ $ch.Name }}
+type {{ $ch.GoName }}Channel struct {
+	{{ $Name }}.{{ $ch.GoName }}
 }
 
-func (ch *{{ $ch.Name }}Channel) Connected(c *eddwise.Client) error {
+func (ch *{{ $ch.GoName }}Channel) Connected(c eddwise.Client) error {
 	log.Println("User connected", c.GetId())
 	return nil
 }
 
-func (ch *{{ $ch.Name }}Channel) Disconnected(c *eddwise.Client) error {
+func (ch *{{ $ch.GoName }}Channel) Disconnected(c eddwise.Client) error {
 	log.Println("User disconnected", c.GetId())
 	return nil
 }
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-func (ch *{{ $ch.Name }}Channel) On{{ $ev }} (ctx {{ $Name }}.{{ $ch.Name }}Context, {{ $ev | lower }} *{{ $Name }}.{{ $ev }}) error {
-	log.Println("received event {{ $ev }}:", {{ $ev | lower }}, "from", ctx.GetClient().GetId() ) 
+func (ch *{{ $ch.GoName }}Channel) On{{ $ev | goname }} (ctx eddwise.Context, {{ $ev | lower }} *{{ $Name }}.{{ $ev | goname }}) error {
+	log.Println("received event {{ $ev | goname }}:", {{ $ev | lower }}, "from", ctx.GetClient().GetId() ) 
 	return nil
 }
 {{ end }}
@@ -320,9 +186,9 @@ func main() {
 	var server = eddwise.NewServer()
 	var ch eddwise.ImplChannel
 {{ range $ch := .Channels }}
-	ch = &{{ $ch.Name }}Channel{}
+	ch = &{{ $ch.GoName }}Channel{}
 	if err := server.Register(ch); err != nil {
-		log.Fatalln("unable to register service {{ $ch.Name }}: ", err)
+		log.Fatalln("unable to register service {{ $ch.GoName }}: ", err)
 	}
 {{ end }}
 	log.Fatalln(server.StartWS("/{{ .Name }}", 3000))
@@ -331,7 +197,8 @@ func main() {
 `
 
 	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
-		"lower": strings.ToLower,
+		"lower":  strings.ToLower,
+		"goname": strings.Title,
 	}).Parse(serverTmpl)
 	if err != nil {
 		return err
@@ -368,10 +235,18 @@ func (design *Design) SkeletonClient(w io.Writer) error {
 {{ range $ch := .Channels }}
   var ch{{ $ch.Name }} = new {{ $ch.Name }}Channel()
 {{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
-  ch{{ $ch.Name }}.on{{ $ev }}(function (event){
-      document.getElementById("output").innerHTML += "Event '{{ $ev }}' received: " + JSON.stringify(event) + "<br>"
+  ch{{ $ch.Name }}.on{{ $ev }}(function ({{ $ev }}){
+      document.getElementById("output").innerHTML += "[{{ $ch.Name }}] Event '{{ $ev }}' received: " + JSON.stringify({{ $ev }}) + "<br>"
   })
 {{ end }}
+  ch{{ $ch.Name }}.connected(function(){
+      document.getElementById("output").innerHTML += "[{{ $ch.Name }}] <span style='color: darkgreen'>Connected</span><br>"
+  })
+
+  ch{{ $ch.Name }}.disconnected(function(){
+      document.getElementById("output").innerHTML += "[{{ $ch.Name }}] <span style='color: darkred'>Disconnected</span><br>"
+  })
+
   client.register(ch{{ $ch.Name }})
 {{ end }}
   
@@ -407,70 +282,70 @@ import(
 	"github.com/exelr/eddwise"
 )
 {{ range $ch := .Channels }}
-var _ eddwise.ImplChannel = (*{{ $ch.Name }})(nil)
-var _ {{ $ch.Name }}Recv = (*{{ $ch.Name }})(nil)
+var _ eddwise.ImplChannel = (*{{ $ch.GoName }})(nil)
+var _ {{ $ch.GoName }}Recv = (*{{ $ch.GoName }})(nil)
 {{ end }}
 {{ range $ch := .Channels }}
-type {{ $ch.Name }}Recv interface {
+type {{ $ch.GoName }}Recv interface {
 {{- range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-	On{{ $ev }}(eddwise.Context, *{{ $ev }}) error
+	On{{ $ev | goname }}(eddwise.Context, *{{ $ev | goname }}) error
 {{- end }}
 }
 
-type {{ $ch.Name }} struct {
+type {{ $ch.GoName }} struct {
 	server eddwise.Server
-	recv {{ $ch.Name }}Recv
+	recv {{ $ch.GoName }}Recv
 }
 
-func (ch *{{ $ch.Name }}) Name() string {
+func (ch *{{ $ch.GoName }}) Name() string {
 	return "{{ $ch.Name }}"
 }
 
-func (ch *{{ $ch.Name }}) Bind(server eddwise.Server) error {
+func (ch *{{ $ch.GoName }}) Bind(server eddwise.Server) error {
 	ch.server = server
 	return nil
 }
 
-func (ch *{{ $ch.Name }}) SetReceiver(chr eddwise.ImplChannel) error {
-	if _, ok := chr.({{ $ch.Name }}Recv); !ok {
-		return errors.New("unexpected channel type while SetReceiver on '{{ $ch.Name }}' channel")
+func (ch *{{ $ch.GoName }}) SetReceiver(chr eddwise.ImplChannel) error {
+	if _, ok := chr.({{ $ch.GoName }}Recv); !ok {
+		return errors.New("unexpected channel type while SetReceiver on '{{ $ch.GoName }}' channel")
 	}
-	ch.recv = chr.({{ $ch.Name }}Recv)
+	ch.recv = chr.({{ $ch.GoName }}Recv)
 	return nil
 }
 
-func (ch *{{ $ch.Name }}) GetServer() eddwise.Server {
+func (ch *{{ $ch.GoName }}) GetServer() eddwise.Server {
 	return ch.server
 }
 
-func (ch *{{ $ch.Name }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage) error {
+func (ch *{{ $ch.GoName }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage) error {
 	switch evt.Name {
 	default:
 		return eddwise.ErrMissingServerHandler(evt.Channel, evt.Name)
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
 	case "{{ $ev }}":
-		var msg = &{{ $ev }}{}
+		var msg = &{{ $ev | goname }}{}
 		if err := ch.server.GetSerializer().Deserialize(evt.Body, msg); err != nil {
 			return err
 		}
-		return ch.recv.On{{ $ev }}(ctx, msg)
+		return ch.recv.On{{ $ev | goname }}(ctx, msg)
 {{ end }}
 	}
 }
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-func (ch *{{ $ch.Name }}) On{{ $ev }}(eddwise.Context, *{{ $ev }}) error {
-	return errors.New("event '{{ $ev }}' is not handled on server")
+func (ch *{{ $ch.GoName }}) On{{ $ev | goname }}(eddwise.Context, *{{ $ev | goname }}) error {
+	return errors.New("event '{{ $ev | goname }}' is not handled on server")
 }
 {{ end }}
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
-func (ch *{{ $ch.Name }}) Send{{ $ev }}(client eddwise.Client, msg *{{ $ev }}) error {
+func (ch *{{ $ch.GoName }}) Send{{ $ev | goname }}(client eddwise.Client, msg *{{ $ev | goname }}) error {
 	return client.Send(ch.Name(), msg)
 }
 {{ end }}
 {{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
-func (ch *{{ $ch.Name }}) Broadcast{{ $ev }}(clients []eddwise.Client, msg *{{ $ev }}) error {
+func (ch *{{ $ch.GoName }}) Broadcast{{ $ev | goname }}(clients []eddwise.Client, msg *{{ $ev | goname }}) error {
 	return eddwise.Broadcast(ch.Name(), msg, clients)
 }
 {{ end }}
@@ -480,7 +355,10 @@ func (ch *{{ $ch.Name }}) Broadcast{{ $ev }}(clients []eddwise.Client, msg *{{ $
 // Event structures
 
 {{ range $st := .Structs }}
-type {{ $st.Name }} struct {
+{{ if $st.HasDoc }}
+{{ $st.GoDoc }}
+{{ end -}}
+type {{ $st.GoName }} struct {
 {{- range $field := $st.Fields -}}
 	{{- if $field.HasDoc }}
 	{{ $field.GoDoc }}{{ end }}
@@ -488,7 +366,7 @@ type {{ $st.Name }} struct {
 {{- end }}
 }
 
-func (evt *{{ $st.Name }}) GetEventName() string {
+func (evt *{{ $st.GoName }}) GetEventName() string {
 	return "{{ $st.Name }}"
 }
 {{ end }}
@@ -496,6 +374,7 @@ func (evt *{{ $st.Name }}) GetEventName() string {
 
 	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
 		"TrimSpace": strings.TrimSpace,
+		"goname":    strings.Title,
 	}).Parse(serverTmpl)
 	if err != nil {
 		return err
@@ -521,25 +400,25 @@ import (
 	"github.com/exelr/eddwise/mock"
 )
 {{ range $ch := .Channels }}
-type {{ $ch.Name }}Behave struct {
+type {{ $ch.GoName }}Behave struct {
 	*mock.ChannelBehave
 }
 
-func New{{ $ch.Name }}Behave(t *testing.T) *{{ $ch.Name }}Behave {
-	return &{{ $ch.Name }}Behave{
+func New{{ $ch.GoName }}Behave(t *testing.T) *{{ $ch.GoName }}Behave {
+	return &{{ $ch.GoName }}Behave{
 		ChannelBehave: mock.NewBehaveChannel(t),
 	}
 }
 
-func (cb *{{ $ch.Name }}Behave) Recv() {{ $Name }}.{{ $ch.Name }}Recv {
-	return cb.ChannelBehave.Recv().({{ $Name }}.{{ $ch.Name }}Recv)
+func (cb *{{ $ch.GoName }}Behave) Recv() {{ $Name }}.{{ $ch.GoName }}Recv {
+	return cb.ChannelBehave.Recv().({{ $Name }}.{{ $ch.GoName }}Recv)
 }
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-func (cb *{{ $ch.Name }}Behave) On{{ $ev }}(clientId uint64, evt *{{ $Name }}.{{ $ev }}, f ...func()) {
+func (cb *{{ $ch.GoName }}Behave) On{{ $ev | goname }}(clientId uint64, evt *{{ $Name }}.{{ $ev | goname }}, f ...func()) {
 	cb.On(clientId,
 		func(ctx eddwise.Context) error {
-			return cb.Recv().On{{ $ev }}(ctx, evt)
+			return cb.Recv().On{{ $ev | goname }}(ctx, evt)
 		}, evt, f...)
 }
 {{ end }}
@@ -549,6 +428,7 @@ func (cb *{{ $ch.Name }}Behave) On{{ $ev }}(clientId uint64, evt *{{ $Name }}.{{
 
 	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
 		"TrimSpace": strings.TrimSpace,
+		"goname":    strings.Title,
 	}).Parse(serverTmpl)
 	if err != nil {
 		return err
@@ -568,7 +448,10 @@ func (design *Design) GenerateClient(w io.Writer) error {
 /**
  * @typedef {{ $struct.Name }}
 {{- range $field := $struct.Fields }}
- * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if $field.TypePointer }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }} {{ $field.Doc | TrimSpace }}
+ * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if $field.TypePointer }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if gt (len $field.Doc) 0 }} - {{ $field.Doc | TrimSpace }}{{ end }}
+{{- end }}
+{{- if gt (len $struct.Doc) 0 }}
+ * @description {{ $struct.Doc }}
 {{- end }}
 */
 
@@ -672,6 +555,14 @@ class {{ .Name }}Channel {
 		return err
 	}
 	return nil
+}
+
+func (design *Design) ChannelsMap() map[string]*Channel {
+	var ret = make(map[string]*Channel)
+	for _, k := range design.Channels {
+		ret[k.Name] = k
+	}
+	return ret
 }
 
 func (design *Design) StructsMap() map[string]*Struct {

@@ -35,12 +35,27 @@ Download the latest version for your OS from [releases](https://github.com/exelr
 go install github.com/exelr/eddwise/cmd/edd
 ```
 
-## Simple design
+## Minimal design
 
 Define your design:
+```yaml
+namespace: pingpong # the namespace of your generated code (packages for go)
+structs:
+  ping: # ping is emitted from server
+    fields:
+      id: uint # the id of the ping
+  pong: # pong is sent from client after a ping
+    fields:
+      id: uint # the id of the pong, same as the id of the received ping
 
+channels:
+  pingpong: # create a channel named pingpong
+    enable:
+      - !!server ping # set ping to be originated only from server
+      - !!client pong # set pong to be originated only from client
+```
 ```go
-// design/design.edd.go
+// design/design.yaml
 
 package pingpong // Package pingpong defines the domain as "pingpong"
 

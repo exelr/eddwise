@@ -94,36 +94,13 @@ func GetModuleName() string {
 }
 
 func gen() {
-	var filesName []string
-	var err = filepath.Walk(designPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		var ext string
-		if len(path) > 7 {
-			ext = path[len(path)-7:]
-		}
-		if ext == ".edd.go" {
-			filesName = append(filesName, path)
-		}
-		return nil
-	})
-
+	var filesName, err = getValidFilesInDesignPath()
 	if err != nil {
-		log.Fatalf("unable to open directory %s: %s\n", designPath, err)
+		log.Fatalln(err)
 	}
 
-	if len(filesName) == 0 {
-		log.Fatalf("no .edd.go files found in specified design path\n")
-	}
-	if len(filesName) > 1 {
-		log.Fatalf("the actual version does not support multiple file parsing\n") //todo
-	}
-
-	var filePath = filesName[0]
-
-	var design = eddgen.NewDesign(moduleName)
-	if err := design.ParseAndValidate(filePath); err != nil {
+	design, err := eddgen.ParseAndValidateYamls(moduleName, filesName...)
+	if err != nil {
 		log.Fatalln(err)
 	}
 
@@ -184,7 +161,7 @@ func gen() {
 	}
 }
 
-func skeleton() {
+func getValidFilesInDesignPath() ([]string, error) {
 	var filesName []string
 	var err = filepath.Walk(designPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -192,33 +169,36 @@ func skeleton() {
 		}
 		var ext string
 		if len(path) > 7 {
-			ext = path[len(path)-7:]
+			ext = path[len(path)-4:]
 		}
-		if ext == ".edd.go" {
+		if ext == ".yml" {
 			filesName = append(filesName, path)
 		}
 		return nil
 	})
 
 	if err != nil {
-		log.Fatalf("unable to open directory %s: %s\n", designPath, err)
+		return nil, fmt.Errorf("unable to open directory %s: %s\n", designPath, err)
 	}
 
 	if len(filesName) == 0 {
-		log.Fatalf("no .edd.go files found in specified design path\n")
+		return nil, fmt.Errorf("no .yml files found in specified design path\n")
 	}
-	if len(filesName) > 1 {
-		log.Fatalf("the actual version does not support multiple file parsing\n") //todo
-	}
+	return filesName, nil
+}
 
-	var filePath = filesName[0]
+func skeleton() {
+	var filesName, err = getValidFilesInDesignPath()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	if len(moduleName) == 0 {
 		log.Fatalln("you have to provide a module name to generate skeleton, use go.mod file or -mod flag")
 	}
 
-	var design = eddgen.NewDesign(moduleName)
-	if err := design.ParseAndValidate(filePath); err != nil {
+	design, err := eddgen.ParseAndValidateYamls(moduleName, filesName...)
+	if err != nil {
 		log.Fatalln(err)
 	}
 
