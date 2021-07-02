@@ -168,10 +168,10 @@ func getValidFilesInDesignPath() ([]string, error) {
 			return nil
 		}
 		var ext string
-		if len(path) > 7 {
-			ext = path[len(path)-4:]
+		if len(path) > 8 {
+			ext = path[len(path)-8:]
 		}
-		if ext == ".yml" {
+		if ext == ".edd.yml" {
 			filesName = append(filesName, path)
 		}
 		return nil
@@ -182,7 +182,7 @@ func getValidFilesInDesignPath() ([]string, error) {
 	}
 
 	if len(filesName) == 0 {
-		return nil, fmt.Errorf("no .yml files found in specified design path\n")
+		return nil, fmt.Errorf("no .edd.yml files found in specified design path\n")
 	}
 	return filesName, nil
 }
@@ -203,21 +203,44 @@ func skeleton() {
 	}
 
 	if genCodeServerPath != "-" {
-		var serverPath = genCodeServerPath + "/" + design.Name
-		if err := os.MkdirAll(serverPath, os.ModePerm); err != nil && os.IsExist(err) {
-			log.Fatalln("unable to create server path for skeleton generation:", err)
+		var serverMainPath = genCodeServerPath + "/" + design.Name
+		if err := os.MkdirAll(serverMainPath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton main generation:", err)
 		}
-		var fileName = serverPath + "/main.go"
-		fmt.Println(fileName)
-		serverWriter, err := os.Create(fileName)
+		var fileNameMain = serverMainPath + "/main.go"
+		fmt.Println(fileNameMain)
+		serverMainWriter, err := os.Create(fileNameMain)
 		if err != nil {
-			log.Fatalln("unable to write server file:", err)
+			log.Fatalln("unable to write server main file:", err)
 		}
 
-		if err := design.SkeletonServer(serverWriter); err != nil {
+		var serverPackagePath = "internal/" + design.Name
+		if err := os.MkdirAll(serverPackagePath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton package generation:", err)
+		}
+		var fileNamePackage = serverPackagePath + "/" + design.Name + ".go"
+		fmt.Println(fileNamePackage)
+		serverPackageWriter, err := os.Create(fileNamePackage)
+		if err != nil {
+			log.Fatalln("unable to write server package file:", err)
+		}
+
+		var serverPackageTestPath = "internal/" + design.Name
+		if err := os.MkdirAll(serverPackageTestPath, os.ModePerm); err != nil && os.IsExist(err) {
+			log.Fatalln("unable to create server path for skeleton package test generation:", err)
+		}
+		var fileNamePackageTest = serverPackageTestPath + "/" + design.Name + "_test.go"
+		fmt.Println(fileNamePackageTest)
+		serverPackageTestWriter, err := os.Create(fileNamePackageTest)
+		if err != nil {
+			log.Fatalln("unable to write server package test file:", err)
+		}
+
+		if err := design.SkeletonServer(serverMainWriter, serverPackageWriter, serverPackageTestWriter); err != nil {
 			log.Fatalln(err)
 		}
-		_ = serverWriter.Close()
+		_ = serverMainWriter.Close()
+		_ = serverPackageWriter.Close()
 	}
 
 	if genCodeClientPath != "-" {

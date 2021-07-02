@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"text/template"
 )
@@ -145,12 +146,54 @@ func (design *Design) Validate() error {
 		}
 	}
 
+	sort.Slice(design.Structs, func(i, j int) bool {
+		return design.Structs[i].Name < design.Structs[j].Name
+	})
+	sort.Slice(design.Channels, func(i, j int) bool {
+		return design.Channels[i].Name < design.Channels[j].Name
+	})
+
 	return nil
 }
 
-func (design *Design) SkeletonServer(w io.Writer) error {
+func (design *Design) SkeletonServer(wMain io.Writer, wPackage io.Writer, wPackageTest io.Writer) error {
 
-	var serverTmpl = `package main
+	var serverSkeletonMainTmpl = `package main
+{{ $Name := .Name }}
+import (
+	"log"
+
+	"{{ .Module }}/internal/{{ $Name }}"
+
+	"github.com/exelr/eddwise"
+)
+
+func main() {
+	var server = eddwise.NewServer()
+	var ch eddwise.ImplChannel
+{{ range $ch := .Channels }}
+	ch = {{ $Name }}.New{{ $ch.GoName }}Channel()
+	if err := server.Register(ch); err != nil {
+		log.Fatalln("unable to register service {{ $ch.GoName }}: ", err)
+	}
+{{ end }}
+	log.Fatalln(server.StartWS("/{{ .Name }}", 3000))
+}
+`
+
+	tmpl, err := template.New("serverSkeletonMainTmpl").Funcs(template.FuncMap{
+		"LowerFirst": LowerFirst,
+		"goname":     strings.Title,
+	}).Parse(serverSkeletonMainTmpl)
+	if err != nil {
+		return err
+	}
+	err = tmpl.Execute(wMain, design)
+	if err != nil {
+		return err
+	}
+
+	var serverSkeletonPackageTmpl = `package {{ .Name}}
 {{ $Name := .Name }}
 import (
 	"log"
@@ -165,6 +208,10 @@ type {{ $ch.GoName }}Channel struct {
 	{{ $Name }}.{{ $ch.GoName }}
 }
 
+func New{{ $ch.GoName }}Channel() *{{ $ch.GoName }}Channel {
+	return &{{ $ch.GoName }}Channel{}
+}
+
 func (ch *{{ $ch.GoName }}Channel) Connected(c eddwise.Client) error {
 	log.Println("User connected", c.GetId())
 	return nil
@@ -176,37 +223,66 @@ func (ch *{{ $ch.GoName }}Channel) Disconnected(c eddwise.Client) error {
 }
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-func (ch *{{ $ch.GoName }}Channel) On{{ $ev | goname }} (ctx eddwise.Context, {{ $ev | lower }} *{{ $Name }}.{{ $ev | goname }}) error {
-	log.Println("received event {{ $ev | goname }}:", {{ $ev | lower }}, "from", ctx.GetClient().GetId() ) 
+func (ch *{{ $ch.GoName }}Channel) On{{ $ev | goname }} (ctx eddwise.Context, {{ $ev | LowerFirst }} *{{ $Name }}.{{ $ev | goname }}) error {
+	log.Println("received event {{ $ev | goname }}:", {{ $ev | LowerFirst }}, "from", ctx.GetClient().GetId() ) 
 	return nil
 }
 {{ end }}
 {{ end }}
-func main() {
-	var server = eddwise.NewServer()
-	var ch eddwise.ImplChannel
-{{ range $ch := .Channels }}
-	ch = &{{ $ch.GoName }}Channel{}
-	if err := server.Register(ch); err != nil {
-		log.Fatalln("unable to register service {{ $ch.GoName }}: ", err)
-	}
-{{ end }}
-	log.Fatalln(server.StartWS("/{{ .Name }}", 3000))
-}
-
 `
 
-	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
-		"lower":  strings.ToLower,
-		"goname": strings.Title,
-	}).Parse(serverTmpl)
+	tmpl, err = template.New("serverSkeletonPackageTmpl").Funcs(template.FuncMap{
+		"LowerFirst": LowerFirst,
+		"goname":     strings.Title,
+	}).Parse(serverSkeletonPackageTmpl)
 	if err != nil {
 		return err
 	}
-	err = tmpl.Execute(w, design)
+	err = tmpl.Execute(wPackage, design)
 	if err != nil {
 		return err
 	}
+
+	var serverSkeletonPackageTestTmpl = `package {{ .Name }}
+{{ $Name := .Name }}
+import (
+	"testing"
+
+	"{{ .Module }}/gen/{{ .Name }}/behave"
+
+	"github.com/exelr/eddwise"
+)
+
+//Note: for the best BDD use command 'goconvey'
+{{ range $ch := .Channels }}
+func TestBasicScenario{{ $ch.GoName }}(t *testing.T) {
+	var behave = {{ $Name }}behave.New{{ $ch.GoName }}Behave(t)
+	behave.Given("an empty {{ $ch.Name }} channel", func() eddwise.ImplChannel { return New{{ $ch.GoName }}Channel() }, func() {
+		var ch = behave.Recv().(*{{ $ch.GoName }}Channel)
+		_ = ch // check ch status in test!
+		behave.ThenClientJoins(1, func() {
+			// after client joins, something would happen...
+			// behave.ThenClientShouldReceiveEvent("with id 1", 1, &{{ $Name }}.Welcome{})
+			// you can also use goconvey.Convey() to test more complex behavioural patterns
+		})
+
+	})
+}
+{{ end }}
+`
+
+	tmpl, err = template.New("serverSkeletonPackageTestTmpl").Funcs(template.FuncMap{
+		"LowerFirst": LowerFirst,
+		"goname":     strings.Title,
+	}).Parse(serverSkeletonPackageTestTmpl)
+	if err != nil {
+		return err
+	}
+	err = tmpl.Execute(wPackageTest, design)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 func (design *Design) SkeletonClient(w io.Writer) error {
@@ -234,11 +310,7 @@ func (design *Design) SkeletonClient(w io.Writer) error {
   var client = new EddClient(wsUri)
 {{ range $ch := .Channels }}
   var ch{{ $ch.Name }} = new {{ $ch.Name }}Channel()
-{{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
-  ch{{ $ch.Name }}.on{{ $ev }}(function ({{ $ev }}){
-      document.getElementById("output").innerHTML += "[{{ $ch.Name }}] Event '{{ $ev }}' received: " + JSON.stringify({{ $ev }}) + "<br>"
-  })
-{{ end }}
+  
   ch{{ $ch.Name }}.connected(function(){
       document.getElementById("output").innerHTML += "[{{ $ch.Name }}] <span style='color: darkgreen'>Connected</span><br>"
   })
@@ -246,7 +318,11 @@ func (design *Design) SkeletonClient(w io.Writer) error {
   ch{{ $ch.Name }}.disconnected(function(){
       document.getElementById("output").innerHTML += "[{{ $ch.Name }}] <span style='color: darkred'>Disconnected</span><br>"
   })
-
+{{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
+  ch{{ $ch.Name }}.on{{ $ev }}(function ({{ $ev | LowerFirst }}){
+      document.getElementById("output").innerHTML += "[{{ $ch.Name }}] Event '{{ $ev }}' received: " + JSON.stringify({{ $ev | LowerFirst }}) + "<br>"
+  })
+{{ end }}
   client.register(ch{{ $ch.Name }})
 {{ end }}
   
@@ -259,7 +335,7 @@ func (design *Design) SkeletonClient(w io.Writer) error {
 `
 
 	tmpl, err := template.New("clientTmpl").Funcs(template.FuncMap{
-		"lower": strings.ToLower,
+		"LowerFirst": LowerFirst,
 	}).Parse(clientTmpl)
 	if err != nil {
 		return err
@@ -362,7 +438,7 @@ type {{ $st.GoName }} struct {
 {{- range $field := $st.Fields -}}
 	{{- if $field.HasDoc }}
 	{{ $field.GoDoc }}{{ end }}
-	{{ $field.GoName }} {{ $field.GoType }} {{ $field.GoAnnotation }}
+	{{ $field.GoName }} {{ $field.GoType }} {{ $field.GoAnnotation }} {{ $field.DirectionDoc }}
 {{- end }}
 }
 
@@ -448,7 +524,7 @@ func (design *Design) GenerateClient(w io.Writer) error {
 /**
  * @typedef {{ $struct.Name }}
 {{- range $field := $struct.Fields }}
- * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if $field.TypePointer }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if gt (len $field.Doc) 0 }} - {{ $field.Doc | TrimSpace }}{{ end }}
+ * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if or ($field.TypePointer) (ne $field.Direction  "") }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if gt (len $field.Doc) 0 }} - {{ $field.Doc | TrimSpace }}{{ end }} {{ $field.DirectionDoc }}
 {{- end }}
 {{- if gt (len $struct.Doc) 0 }}
  * @description {{ $struct.Doc }}

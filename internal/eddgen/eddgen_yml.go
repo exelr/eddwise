@@ -131,6 +131,17 @@ func (design *Design) ParseYaml(filePath string) error {
 				Type:     Type{},
 				Doc:      GetComments(&fieldYaml),
 			}
+
+			switch fieldYaml.Tag {
+			case "!!str":
+			case "!!server":
+				field.Direction = ServerToClient
+			case "!!client":
+				field.Direction = ClientToServer
+			default:
+				return fmt.Errorf("unknown tag '%s' in field '%s'", fieldYaml.Tag, fieldName)
+			}
+
 			st.Fields = append(st.Fields, field)
 		}
 		design.Structs = append(design.Structs, st)
@@ -152,6 +163,8 @@ func (design *Design) ParseYaml(filePath string) error {
 				ch.Directions[ServerToClient][node.Value] = true
 			} else if node.Tag == "!!client" {
 				ch.Directions[ClientToServer][node.Value] = true
+			} else if node.Tag != "!!str" {
+				return fmt.Errorf("unknown tag '%s' in channel '%s'", node.Tag, name)
 			}
 		}
 		design.Channels = append(design.Channels, ch)

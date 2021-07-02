@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 type Direction string
 
 const (
+	Any            = ""
 	ServerToClient = "ServerToClient"
 	ClientToServer = "ClientToServer"
 )
@@ -58,6 +61,7 @@ type Field struct {
 	TypePointer bool
 	Type        Type
 	Doc         string
+	Direction   Direction
 }
 
 func (f *Field) RawType() string {
@@ -74,6 +78,9 @@ func (f *Field) GoType() string {
 	if f.TypePointer {
 		return "*" + f.TypeName
 	}
+	if f.Direction != Any {
+		return "*" + f.TypeName
+	}
 	return f.TypeName
 }
 
@@ -85,12 +92,21 @@ func (f *Field) GoAnnotation() string {
 	if f.TypePointer {
 		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.Name)
 	}
+	if f.Direction != Any {
+		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.Name)
+	}
 	return fmt.Sprintf("`json:\"%s\"`", f.Name)
 }
-
+func (f *Field) DirectionDoc() string {
+	if f.Direction != Any {
+		return "// " + string(f.Direction)
+	}
+	return ""
+}
 func (f *Field) HasDoc() bool {
 	return len(f.Doc) > 0
 }
+
 func (f *Field) GoDoc() string {
 	if f.HasDoc() {
 		var docWithCorrectFieldName = regexp.MustCompile("\\b"+f.Name+"\\b").ReplaceAllString(f.Doc, f.GoName())
@@ -155,4 +171,12 @@ func (s *Struct) GoDoc() string {
 		return fmt.Sprintf("// %s", strings.TrimSpace(docWithCorrectFieldName))
 	}
 	return ""
+}
+
+func LowerFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToLower(r)) + s[n:]
 }
