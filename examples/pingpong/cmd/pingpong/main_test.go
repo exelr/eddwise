@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/exelr/eddwise"
-	"pingpongyaml/gen/pingpong"
-	pingpongbehave "pingpongyaml/gen/pingpong/behave"
 	"testing"
 	"time"
+
+	"github.com/exelr/eddwise"
+	"pingpongyaml/gen/pingpong"
+	"pingpongyaml/gen/pingpong/behave"
 )
 
 func TestBasicScenario(t *testing.T) {
@@ -21,6 +22,5 @@ func TestBasicScenario(t *testing.T) {
 				})
 			})
 		})
-
 	})
 }

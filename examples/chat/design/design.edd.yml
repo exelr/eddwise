@@ -1,0 +1,29 @@
+namespace: chat
+structs:
+  ChangeName: # ChangeName is sent from client to server and then broadcasted by server to all clients
+    fields:
+      UserId: !!server uint64 # the optional UserId is set only by server while broadcasting
+      Name: string
+  Message: # Message is sent from client to server and broadcasted to other clients
+    fields:
+      UserId: !!server uint64 # UserId is the optional id of the user. Set only by server, not by client
+      Text: string
+  UserEnter: # UserEnter is broadcast by server to all clients when a new client connects
+    fields:
+      UserId: uint64
+      Name: string
+  UserLeft: # UserLeft is broadcast by server to all clients when a client lefts
+    fields:
+      UserId: uint64
+  UserListUpdate: # UserListUpdate is sent to a new connected client
+    fields:
+      List: map[uint64]string
+
+channels:
+  Chat:
+    enable:
+      - ChangeName
+      - Message
+      - !!server UserEnter
+      - !!server UserLeft
+      - !!server UserListUpdate
