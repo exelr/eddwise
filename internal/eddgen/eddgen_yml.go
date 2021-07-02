@@ -3,7 +3,7 @@ package eddgen
 import (
 	"fmt"
 	"gopkg.in/yaml.v3"
-	"os"
+	"io/ioutil"
 	"strings"
 )
 
@@ -103,7 +103,7 @@ func (design *Design) Merge(design2 *Design) error {
 }
 
 func (design *Design) ParseYaml(filePath string) error {
-	var data, err = os.ReadFile(filePath)
+	var data, err = ioutil.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
