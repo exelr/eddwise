@@ -124,7 +124,7 @@ ClientSocket:
 You can also generate skeleton code for client and server directly:
 
 ```shell
-edd pingpong/design skeleton
+edd design skeleton
 ```
 
 ### Want to see more?
