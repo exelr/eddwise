@@ -54,31 +54,6 @@ channels:
       - !!server ping # set ping to be originated only from server
       - !!client pong # set pong to be originated only from client
 ```
-```go
-// design/design.yaml
-
-package pingpong // Package pingpong defines the domain as "pingpong"
-
-// PingPong defines the channel with its events
-type PingPong interface {
-    Enable (
-        Ping, 
-        Pong,
-    ) //enable those messages to be propagated over the channel
-    ClientToServer(Ping) //opt. Direction of the Ping message
-    ServerToClient(Pong) //opt. Direction of the Pong message
-}
-
-// implement the events structures
-
-type Ping struct {
-    id int
-}
-
-type Pong struct {
-    id int
-}
-```
 
 Generate the code:
 
@@ -86,7 +61,7 @@ Generate the code:
 edd pingpong/design gen
 ```
 
-## Powerful library
+## Simple library
 
 Server:
 ```go
