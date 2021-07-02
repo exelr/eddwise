@@ -25,7 +25,7 @@ type YamlChannel struct {
 	Enable yaml.Node `yaml:"enable"`
 }
 
-func GetComments(n *yaml.Node) string {
+func GetComments(n yaml.Node) string {
 	var comment string
 	if len(n.HeadComment) > 0 {
 		comment = strings.Trim(n.HeadComment, "# ")
@@ -129,7 +129,7 @@ func (design *Design) ParseYaml(filePath string) error {
 				Name:     fieldName,
 				TypeName: fieldYaml.Value,
 				Type:     Type{},
-				Doc:      GetComments(&fieldYaml),
+				Doc:      GetComments(fieldYaml),
 			}
 
 			switch fieldYaml.Tag {
@@ -172,7 +172,7 @@ func (design *Design) ParseYaml(filePath string) error {
 	var stMap = design.StructsMap()
 	for i := 0; i < len(yamlDesignRaw.Structs.Content); i += 2 {
 		var node = yamlDesignRaw.Structs.Content[i]
-		stMap[node.Value].Doc = GetComments(node)
+		stMap[node.Value].Doc = GetComments(*node)
 	}
 	return nil
 }
