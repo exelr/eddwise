@@ -150,6 +150,7 @@ func TestServer(t *testing.T) {
 	if err := s.StartWS("/test", 34362); err != nil {
 		t.Fatalf("unable to start websocket server: %s\n", err)
 	}
+	<-time.After(1000 * time.Millisecond)
 
 	if !ch.GetConnected() {
 		t.Fatalf("Connect() method was not called\n")
