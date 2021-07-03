@@ -46,6 +46,11 @@ func (c *ClientSocket) GetId() uint64 {
 }
 
 func (c *ClientSocket) Send(channel string, event Event) error {
+	if ecf, ok := event.(EventCheckSendFields); ok {
+		if err := ecf.CheckSendFields(); err != nil {
+			return err
+		}
+	}
 	if c.closed {
 		return errors.New("writing to closed client")
 	}
@@ -275,6 +280,11 @@ func (s *ServerSocket) GetSerializer() Serializer {
 }
 
 func Broadcast(channel string, event Event, clients []Client) error {
+	if ecf, ok := event.(EventCheckSendFields); ok {
+		if err := ecf.CheckSendFields(); err != nil {
+			return err
+		}
+	}
 	var errCh = make(chan error, 1)
 	var errs []error
 	var wgErr sync.WaitGroup
@@ -376,4 +386,13 @@ type TestableChannel interface {
 
 type Event interface {
 	GetEventName() string
+}
+
+type EventCheckReceivedFields interface {
+	Event
+	CheckReceivedFields() error
+}
+type EventCheckSendFields interface {
+	Event
+	CheckSendFields() error
 }

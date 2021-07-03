@@ -51,6 +51,9 @@ func (ch *Pingpong) Route(ctx eddwise.Context, evt *eddwise.EventMessage) error 
 		if err := ch.server.GetSerializer().Deserialize(evt.Body, msg); err != nil {
 			return err
 		}
+		if err := msg.CheckReceivedFields(); err != nil {
+			return err
+		}
 		return ch.recv.OnPong(ctx, msg)
 
 	}
@@ -80,6 +83,14 @@ func (evt *Ping) GetEventName() string {
 	return "ping"
 }
 
+func (evt *Ping) CheckSendFields() error {
+	return nil
+}
+
+func (evt *Ping) CheckReceivedFields() error {
+	return nil
+}
+
 // after a ping, a Pong is sent from client
 type Pong struct {
 	// the Id of the pong, same as the Id of the received ping
@@ -88,4 +99,12 @@ type Pong struct {
 
 func (evt *Pong) GetEventName() string {
 	return "pong"
+}
+
+func (evt *Pong) CheckSendFields() error {
+	return nil
+}
+
+func (evt *Pong) CheckReceivedFields() error {
+	return nil
 }

@@ -2,13 +2,13 @@
 
 /**
  * @typedef ping
- * @property {uint} id - the id of the ping
+ * @property {uint} id - the id of the ping 
  * @description ping is emitted from server
 */
 
 /**
  * @typedef pong
- * @property {uint} id - the id of the pong, same as the id of the received ping
+ * @property {uint} id - the id of the pong, same as the id of the received ping 
  * @description after a ping, a pong is sent from client
 */
 

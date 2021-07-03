@@ -404,6 +404,9 @@ func (ch *{{ $ch.GoName }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage
 		if err := ch.server.GetSerializer().Deserialize(evt.Body, msg); err != nil {
 			return err
 		}
+		if err := msg.CheckReceivedFields(); err != nil {
+			return err
+		}
 		return ch.recv.On{{ $ev | goname }}(ctx, msg)
 {{ end }}
 	}
@@ -444,6 +447,24 @@ type {{ $st.GoName }} struct {
 
 func (evt *{{ $st.GoName }}) GetEventName() string {
 	return "{{ $st.Name }}"
+}
+
+func (evt *{{ $st.GoName }}) CheckSendFields() error {
+{{- range $field := $st.FieldsWithStrictDirection "ClientToServer" }} 
+	if evt.{{ $field.GoName }} != nil {
+		return errors.New("{{ $st.GoName }}.{{ $field.GoName }} must not be set")
+	}
+{{- end }}
+	return nil
+}
+
+func (evt *{{ $st.GoName }}) CheckReceivedFields() error {
+{{- range $field := $st.FieldsWithStrictDirection "ServerToClient" }} 
+	if evt.{{ $field.GoName }} != nil {
+		return errors.New("{{ $field.Name }} is an invalid field")
+	}
+{{- end }}
+	return nil
 }
 {{ end }}
 `
