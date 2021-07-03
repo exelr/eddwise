@@ -159,6 +159,16 @@ type Struct struct {
 	Doc    string
 }
 
+func (s *Struct) FieldsWithStrictDirection(direction Direction) []*Field {
+	var ret = make([]*Field, 0)
+	for i, f := range s.Fields {
+		if f.Direction == direction {
+			ret = append(ret, &s.Fields[i])
+		}
+	}
+	return ret
+}
+
 func (s *Struct) GoName() string {
 	return strings.Title(s.Name)
 }
