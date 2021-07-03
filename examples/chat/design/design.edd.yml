@@ -1,10 +1,10 @@
 namespace: chat
 structs:
-  ChangeName: # ChangeName is sent from client to server and then broadcasted by server to all clients
+  ChangeName: # ChangeName is sent from client to server and then broadcast by server to all clients
     fields:
       UserId: !!server uint64 # the optional UserId is set only by server while broadcasting
       Name: string
-  Message: # Message is sent from client to server and broadcasted to other clients
+  Message: # Message is sent from client to server and broadcast to other clients
     fields:
       UserId: !!server uint64 # UserId is the optional id of the user. Set only by server, not by client
       Text: string
