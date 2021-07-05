@@ -42,18 +42,18 @@ Define your design:
 # design/pingpong.edd.yml
 namespace: pingpong # the namespace of your generated code (packages for go)
 structs:
-  ping: # ping is emitted from server
+  ping: # ping is emitted from client
     fields:
       id: uint # the id of the ping
-  pong: # pong is sent from client after a ping
+  pong: # pong is sent from server after a ping
     fields:
       id: uint # the id of the pong, same as the id of the received ping
 
 channels:
   pingpong: # create a channel named pingpong
-    enable:
-      - !!server ping # set ping to be originated only from server
-      - !!client pong # set pong to be originated only from client
+    enable: # define the events that can pass through the channel pingpong with an optional direction
+      - !!client ping # set ping to be originated only from client 
+      - !!server pong # set pong to be originated only from server
 ```
 
 Generate the code:
