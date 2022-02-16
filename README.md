@@ -18,8 +18,8 @@
 
 ## Design First
 
-You can provide a simple description of your service with a subset of Golang syntax,
-and you are able to generate **documented** code of both server (Golang) and client (Javascript), and dummy server/client implementations to be filled with business logic.
+You provide a simple description of your service within a yaml file,
+and you are able to generate **documented** code of both server (Golang) and client (Javascript). A dummy server/client implementations will be generated too, so you can fill them with business logic.
 
 ## Behavioural Second
 
@@ -94,7 +94,7 @@ func main(){
 }
 
 ```
-ClientSocket:
+Client:
 ```html
 // web/pingpong/app.html
 <script src="//localhost:3000/pingpong/edd.js"></script>
@@ -132,28 +132,6 @@ edd design skeleton
 See [Examples directory](examples).
 
 A full demo of a simple web game is available, see [Filotto](https://github.com/exelr/filotto).
-
-## Why not pub/sub for an event driven design system ?
-
-Mainly because publish and subscribe adds a layer between channel and events,
-in particular for any defined event you have to associate it to at least a publish or a subscription (to make sense of its existence).
-Instead Edd WiSe define a channel and messages that can go trough the channel, associating to the message an optional direction (Server->ClientSocket or ClientSocket->Server).
-So the actual relation of "publish" and "subscribe" (or both) is an explicit design direction (or the lack of it) of the event in the channel.
-
-Take the example of pingpong service above:
-- In pub/sub pattern you have to define the pub and the sub part of the channel, but you are not defining if the client nor the server is the consumer or the publisher, so you have to do it in the business logic layer, or have to define an additional layer of metadata, or configuration layer that you will be setup next (it is ok in different scenarios, especially where queues are involved).
-- Eddwise just use directions to enforce the consumer or the publisher of a particular event.
-  Publishers and subscribers can be both client and server concurrently.
-  Considering that the main use of Edd WiSe is for frontend<->backend direct communication, I feel the approach more simple and reactive wrt pub/sub.
-
-
-If you want to keep the channel more abstract, say you want to reply to a pong when a ping is received regardless of the source of the incoming ping, you can just drop the direction of your events in the channel,
-and implement on both client and server the pong transmission after ping reception, and the timed ping transmission.
-
-## Why Golang DSL?
-
-The main reason is because Golang interfaces and structures are strong typed and easy to validate and generate code from them (thanks to go/ast <3).
-In the future we can use more appropriate DSL to design (jsonschema/protobuf/...?) or evolve the actual one.
 
 ## Alternatives
 
