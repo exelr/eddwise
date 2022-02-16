@@ -254,6 +254,8 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 
 		}
 
+	}, websocket.Config{
+		EnableCompression: true,
 	}))
 	return s.App.Listen(fmt.Sprintf(":%d", port))
 }

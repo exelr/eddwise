@@ -114,6 +114,8 @@ func (design *Design) Validate() error {
 			switch f.TypeName {
 			case "bool", "byte", "complex128", "complex64", "error", "float32", "float64", "int", "int16", "int32", "int64", "int8", "rune", "string", "uint", "uint16", "uint32", "uint64", "uint8", "uintptr":
 				//builtin
+			case "[]byte":
+				//builtin todo add a proper way to parse slices
 			default:
 				if strings.HasPrefix(f.TypeName, "map[") {
 					//builtin
