@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/websocket/v2"
 	"log"
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
+	"github.com/ugorji/go/codec"
 )
 
 //go:embed eddclient.js
@@ -59,12 +61,12 @@ func (c *ClientSocket) Send(channel string, event Event) error {
 		Name:    event.GetEventName(),
 	}
 	var err error
-	evt.Body, err = c.Server.Serializer.Serialize(event)
+	evt.Body, err = c.Server.Codec().Encode(event)
 	if err != nil {
 		return err
 	}
 
-	m, err := c.Server.Serializer.Serialize(evt)
+	m, err := c.Server.Codec().Encode(evt)
 	if err != nil {
 		return err
 	}
@@ -91,12 +93,31 @@ func (c *ClientSocket) Close() error {
 	return c.Conn.Close()
 }
 
+type CodecSerializer struct {
+	handle codec.Handle
+}
+
+func NewCodecSerializer(handle codec.Handle) *CodecSerializer {
+	return &CodecSerializer{handle}
+}
+
+func (cs *CodecSerializer) Encode(v interface{}) ([]byte, error) {
+	var buf = make([]byte, 128)
+	var err = codec.NewEncoderBytes(&buf, cs.handle).Encode(v)
+	return buf, err
+}
+
+func (cs *CodecSerializer) Decode(data []byte, v interface{}) error {
+	var err = codec.NewDecoderBytes(data, cs.handle).Decode(v)
+	return err
+}
+
 type Server interface {
 	AddClient(Client)
 	GetClients(...uint64) []Client
 	GetClient(uint64) Client
 	RemoveClient(Client)
-	GetSerializer() Serializer
+	Codec() *CodecSerializer
 }
 
 var _ Server = (*ServerSocket)(nil)
@@ -104,7 +125,7 @@ var _ Server = (*ServerSocket)(nil)
 type ServerSocket struct {
 	Conn               net.Conn
 	RegisteredChannels map[string]ImplChannel
-	Serializer         Serializer
+	codec              *CodecSerializer
 	ClientAutoInc      uint64
 	Clients            map[uint64]Client
 	ClientsMx          sync.RWMutex
@@ -113,7 +134,7 @@ type ServerSocket struct {
 
 func NewServer() *ServerSocket {
 	return &ServerSocket{
-		Serializer:         &JsonSerializer{},
+		codec:              NewCodecSerializer(&codec.JsonHandle{}),
 		RegisteredChannels: make(map[string]ImplChannel),
 		Clients:            make(map[uint64]Client),
 	}
@@ -245,7 +266,7 @@ func (s *ServerSocket) Register(ch ImplChannel) error {
 
 func (s *ServerSocket) ProcessEvent(ctx Context, rawEvent []byte) error {
 	var event = &EventMessage{}
-	if err := s.Serializer.Deserialize(rawEvent, event); err != nil {
+	if err := s.Codec().Decode(rawEvent, event); err != nil {
 		return err
 	}
 	if len(event.Channel) == 0 {
@@ -275,8 +296,8 @@ for1:
 	return ret
 }
 
-func (s *ServerSocket) GetSerializer() Serializer {
-	return s.Serializer
+func (s *ServerSocket) Codec() *CodecSerializer {
+	return s.codec
 }
 
 func Broadcast(channel string, event Event, clients []Client) error {
