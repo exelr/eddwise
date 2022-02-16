@@ -72,7 +72,7 @@ package main
 import (
     "log"
 
-    "github.com/hacktales/eddwise"
+    "github.com/exelr/eddwise"
     "pingpong/gen/pingpong"
 )
 
@@ -129,7 +129,7 @@ edd design skeleton
 
 ### Want to see more?
 
-See [Examples directory](examples).
+See [Examples repo](https://github.com/exelr/eddwise-examples).
 
 A full demo of a simple web game is available, see [Filotto](https://github.com/exelr/filotto).
 
