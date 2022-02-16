@@ -53,6 +53,6 @@ func (s *ServerMock) RemoveClient(c eddwise.Client) {
 	delete(s.Clients, c.GetId())
 }
 
-func (s *ServerMock) GetSerializer() eddwise.Serializer {
+func (s *ServerMock) Codec() *eddwise.CodecSerializer {
 	return nil
 }

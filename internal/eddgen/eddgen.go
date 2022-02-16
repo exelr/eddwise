@@ -401,7 +401,7 @@ func (ch *{{ $ch.GoName }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage
 {{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
 	case "{{ $ev }}":
 		var msg = &{{ $ev | goname }}{}
-		if err := ch.server.GetSerializer().Deserialize(evt.Body, msg); err != nil {
+		if err := ch.server.Codec().Decode(evt.Body, msg); err != nil {
 			return err
 		}
 		if err := msg.CheckReceivedFields(); err != nil {

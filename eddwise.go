@@ -124,6 +124,7 @@ var _ Server = (*ServerSocket)(nil)
 
 type ServerSocket struct {
 	Conn               net.Conn
+	registeredStatic   map[string]string
 	RegisteredChannels map[string]ImplChannel
 	codec              *CodecSerializer
 	ClientAutoInc      uint64
@@ -135,6 +136,7 @@ type ServerSocket struct {
 func NewServer() *ServerSocket {
 	return &ServerSocket{
 		codec:              NewCodecSerializer(&codec.JsonHandle{}),
+		registeredStatic:   make(map[string]string),
 		RegisteredChannels: make(map[string]ImplChannel),
 		Clients:            make(map[uint64]Client),
 	}
@@ -158,6 +160,10 @@ func (s *ServerSocket) RemoveClient(c Client) {
 	delete(s.Clients, c.GetId())
 }
 
+func (s *ServerSocket) RegisterStatic(path, dir string) {
+	s.registeredStatic[path] = dir
+}
+
 func (s *ServerSocket) StartWS(wsPath string, port int) error {
 
 	if s.App != nil {
@@ -167,6 +173,9 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 	}
 
 	s.App = fiber.New()
+	for path, dir := range s.registeredStatic {
+		s.App.Static(path, dir)
+	}
 
 	s.App.Use(wsPath, func(c *fiber.Ctx) error {
 		if bytes.HasSuffix(c.Request().URI().Path(), []byte("/edd.js")) {
