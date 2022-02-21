@@ -58,7 +58,7 @@ func (c *ClientSocket) Send(channel string, event Event) error {
 	}
 	var evt = &EventMessage{
 		Channel: channel,
-		Name:    event.GetEventName(),
+		Name:    event.ProtocolAlias(),
 	}
 	var err error
 	evt.Body, err = c.Server.Codec().Encode(event)
