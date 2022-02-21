@@ -15,9 +15,9 @@ type Design struct {
 	Structs  []*Struct
 }
 
-func NewDesign(module string) *Design {
-	return &Design{Module: module}
-}
+//func NewDesign(module string) *Design {
+//	return &Design{Module: module}
+//}
 
 //func (design *Design) ParseAndValidate(filePath string) error {
 //	if err := design.Parse(filePath); err != nil {
@@ -99,7 +99,7 @@ func (design *Design) Validate() error {
 	for _, eddCh := range design.Channels {
 		for _, t := range eddCh.Enabled {
 			if _, ok := structs[t.Name]; !ok {
-				return fmt.Errorf("unknown enabled '%s' type in channel '%s'", t, eddCh.Name)
+				return fmt.Errorf("unknown enabled '%s' type in channel '%s'", t.Name, eddCh.Name)
 			}
 		}
 	}
