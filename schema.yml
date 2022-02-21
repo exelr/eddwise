@@ -1,5 +1,18 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://github.com/exelr/eddwise/schema.yml"
+.enum: &typeEnum
+  - int
+  - int8
+  - int16
+  - int32
+  - int64
+  - uint
+  - uint8
+  - uint16
+  - uint32
+  - uint64
+  - string
+  - "[]byte"
 type: object
 required:
   - namespace
@@ -13,19 +26,27 @@ properties:
         type: object
         additionalProperties: false
         properties:
+          alias:
+            type: string
           fields:
             type: object
             patternProperties:
               ".*":
                 anyOf:
-                  - enum:
-                    - int
-                    - uint
-                    - string
-                    - "[]byte"
-                  - type: string
-                    enum:
-                      $data: "/structs#"
+                  - enum: *typeEnum
+#                  - type: &typeStr
+#                    enum:
+#                      $data: "/structs#"
+                  - type: object
+                    additionalProperties: false
+                    properties:
+                      alias:
+                        type: string
+                      type:
+                        anyOf: *typeEnum
+
+
+
   channels:
     type: object
     patternProperties:

@@ -418,6 +418,7 @@ type TestableChannel interface {
 
 type Event interface {
 	GetEventName() string
+	ProtocolAlias() string
 }
 
 type EventCheckReceivedFields interface {

@@ -18,7 +18,13 @@ type YamlDesignRaw struct {
 	Channels yaml.Node `yaml:"channels"`
 }
 type YamlStruct struct {
+	Alias  string               `yaml:"alias"`
 	Fields map[string]yaml.Node `yaml:"fields"`
+}
+
+type YamlFullField struct {
+	Alias string `yaml:"alias"`
+	Type  string `yaml:"type"`
 }
 
 type YamlChannel struct {
@@ -120,10 +126,14 @@ func (design *Design) ParseYaml(filePath string) error {
 
 	design.Name = yamlDesign.Namespace
 
+	var structAliasMap = make(map[string]*Struct)
+	var structMap = make(map[string]*Struct)
 	for name, stYaml := range yamlDesign.Structs {
 		var st = &Struct{
-			Name: name,
+			Name:  name,
+			Alias: stYaml.Alias,
 		}
+		var fieldAliasMap = make(map[string]bool)
 		for fieldName, fieldYaml := range stYaml.Fields {
 			var field = Field{
 				Name:     fieldName,
@@ -131,8 +141,17 @@ func (design *Design) ParseYaml(filePath string) error {
 				Type:     Type{},
 				Doc:      GetComments(fieldYaml),
 			}
+			if fieldYaml.Kind == yaml.MappingNode {
+				var ff = YamlFullField{}
+				if err = fieldYaml.Decode(&ff); err != nil {
+					return fmt.Errorf("unexpected object in field %s: %w", fieldName, err)
+				}
+				field.Alias = ff.Alias
+				field.TypeName = ff.Type
+			}
 
 			switch fieldYaml.Tag {
+			case "!!map":
 			case "!!str":
 			case "!!server":
 				field.Direction = ServerToClient
@@ -141,9 +160,18 @@ func (design *Design) ParseYaml(filePath string) error {
 			default:
 				return fmt.Errorf("unknown tag '%s' in field '%s'", fieldYaml.Tag, fieldName)
 			}
-
+			if fieldAliasMap[field.ProtocolAlias()] {
+				return fmt.Errorf("field alias `%s` already used in struct `%s`", field.ProtocolAlias(), st.Name)
+			}
+			fieldAliasMap[field.ProtocolAlias()] = true
 			st.Fields = append(st.Fields, field)
 		}
+
+		if structAliasMap[st.ProtocolAlias()] != nil {
+			return fmt.Errorf("struct alias `%s` already used", st.ProtocolAlias())
+		}
+		structAliasMap[st.ProtocolAlias()] = st
+		structMap[st.Name] = st
 		design.Structs = append(design.Structs, st)
 	}
 
@@ -158,7 +186,7 @@ func (design *Design) ParseYaml(filePath string) error {
 			},
 		}
 		for _, node := range chYaml.Enable.Content {
-			ch.Enabled = append(ch.Enabled, node.Value)
+			ch.Enabled = append(ch.Enabled, structMap[node.Value])
 			if node.Tag == "!!server" {
 				ch.Directions[ServerToClient][node.Value] = true
 			} else if node.Tag == "!!client" {

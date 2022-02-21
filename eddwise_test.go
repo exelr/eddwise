@@ -68,6 +68,9 @@ type TestResponse string
 func (TestResponse) GetEventName() string {
 	return "testResponse"
 }
+func (TestResponse) ProtocolAlias() string {
+	return "testResponse"
+}
 
 func (ch *TestChannel) Route(ctx Context, event *EventMessage) error {
 	if event.Channel != ch.Name() {

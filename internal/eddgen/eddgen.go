@@ -2,11 +2,7 @@ package eddgen
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/template"
@@ -23,66 +19,66 @@ func NewDesign(module string) *Design {
 	return &Design{Module: module}
 }
 
-func (design *Design) ParseAndValidate(filePath string) error {
-	if err := design.Parse(filePath); err != nil {
-		return err
-	}
-	return design.Validate()
-}
+//func (design *Design) ParseAndValidate(filePath string) error {
+//	if err := design.Parse(filePath); err != nil {
+//		return err
+//	}
+//	return design.Validate()
+//}
 
-func (design *Design) Parse(filePath string) error {
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("unable to open file %s: %w\n", filePath, err)
-	}
-	defer func() { _ = file.Close() }()
-
-	var fSet = token.NewFileSet() // positions are relative to fSet
-
-	// Parse src but stop after processing the imports.
-	f, err := parser.ParseFile(fSet, filePath, file, parser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("unable to parse file %s: %w", filePath, err)
-	}
-
-	design.Name = f.Name.Name
-
-	for _, d := range f.Decls {
-		var gen, ok = d.(*ast.GenDecl)
-		if !ok {
-			continue
-		}
-
-		if len(gen.Specs) == 0 {
-			continue
-		}
-
-		t, ok := gen.Specs[0].(*ast.TypeSpec)
-		if !ok {
-			continue
-		}
-
-		switch tt := t.Type.(type) {
-		case *ast.InterfaceType:
-			var eddCh, err = ParseChannel(t.Name.Name, t.Doc.Text(), tt)
-			if err != nil {
-				return fmt.Errorf("unable to parse channel: %w", err)
-			}
-			design.Channels = append(design.Channels, eddCh)
-		case *ast.StructType:
-			var eddSt, err = design.ParseStruct(t.Name.Name, t.Doc.Text(), tt)
-			if err != nil {
-				return fmt.Errorf("unable to parse struct: %w", err)
-			}
-			design.Structs = append(design.Structs, eddSt)
-		}
-
-	}
-
-	return nil
-
-}
+//func (design *Design) Parse(filePath string) error {
+//
+//	file, err := os.Open(filePath)
+//	if err != nil {
+//		return fmt.Errorf("unable to open file %s: %w\n", filePath, err)
+//	}
+//	defer func() { _ = file.Close() }()
+//
+//	var fSet = token.NewFileSet() // positions are relative to fSet
+//
+//	// Parse src but stop after processing the imports.
+//	f, err := parser.ParseFile(fSet, filePath, file, parser.ParseComments)
+//	if err != nil {
+//		return fmt.Errorf("unable to parse file %s: %w", filePath, err)
+//	}
+//
+//	design.Name = f.Name.Name
+//
+//	for _, d := range f.Decls {
+//		var gen, ok = d.(*ast.GenDecl)
+//		if !ok {
+//			continue
+//		}
+//
+//		if len(gen.Specs) == 0 {
+//			continue
+//		}
+//
+//		t, ok := gen.Specs[0].(*ast.TypeSpec)
+//		if !ok {
+//			continue
+//		}
+//
+//		switch tt := t.Type.(type) {
+//		case *ast.InterfaceType:
+//			var eddCh, err = ParseChannel(t.Name.Name, t.Doc.Text(), tt)
+//			if err != nil {
+//				return fmt.Errorf("unable to parse channel: %w", err)
+//			}
+//			design.Channels = append(design.Channels, eddCh)
+//		case *ast.StructType:
+//			var eddSt, err = design.ParseStruct(t.Name.Name, t.Doc.Text(), tt)
+//			if err != nil {
+//				return fmt.Errorf("unable to parse struct: %w", err)
+//			}
+//			design.Structs = append(design.Structs, eddSt)
+//		}
+//
+//	}
+//
+//	return nil
+//
+//}
 
 func (design *Design) Validate() error {
 	//validate if direction of events in channels are ok
@@ -90,7 +86,7 @@ func (design *Design) Validate() error {
 		var mEnabled = eddCh.EnabledMap()
 		for _, dir := range []Direction{ServerToClient, ClientToServer} {
 			for t := range eddCh.Directions[dir] {
-				if !mEnabled[t] {
+				if mEnabled[t] == nil {
 					return fmt.Errorf("cannot define '%s' direction to not enabled message '%s'", dir, t)
 				}
 			}
@@ -102,7 +98,7 @@ func (design *Design) Validate() error {
 	//validate if enabled type exists
 	for _, eddCh := range design.Channels {
 		for _, t := range eddCh.Enabled {
-			if _, ok := structs[t]; !ok {
+			if _, ok := structs[t.Name]; !ok {
 				return fmt.Errorf("unknown enabled '%s' type in channel '%s'", t, eddCh.Name)
 			}
 		}
@@ -400,8 +396,9 @@ func (ch *{{ $ch.GoName }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage
 	switch evt.Name {
 	default:
 		return eddwise.ErrMissingServerHandler(evt.Channel, evt.Name)
-{{ range $ev, $_ := $ch.GetDirectionEvents "ClientToServer" }}
-	case "{{ $ev }}":
+{{ range $ev, $evData := $ch.GetDirectionEvents "ClientToServer" }}
+	// {{ $ev }}
+	case "{{ $evData.ProtocolAlias }}":
 		var msg = &{{ $ev | goname }}{}
 		if err := ch.server.Codec().Decode(evt.Body, msg); err != nil {
 			return err
@@ -410,7 +407,7 @@ func (ch *{{ $ch.GoName }}) Route(ctx eddwise.Context, evt *eddwise.EventMessage
 			return err
 		}
 		return ch.recv.On{{ $ev | goname }}(ctx, msg)
-{{ end }}
+{{- end }}
 	}
 }
 
@@ -449,6 +446,10 @@ type {{ $st.GoName }} struct {
 
 func (evt *{{ $st.GoName }}) GetEventName() string {
 	return "{{ $st.Name }}"
+}
+
+func (evt *{{ $st.GoName }}) ProtocolAlias() string {
+	return "{{ $st.ProtocolAlias }}"
 }
 
 func (evt *{{ $st.GoName }}) CheckSendFields() error {
@@ -600,14 +601,15 @@ class {{ .Name }}Channel {
 			default:
 				console.log("unexpected event ", name, "in channel {{ $ch.Name }}")
 				break
-{{ range $event, $_ := $ch.GetDirectionEvents "ServerToClient"  }}
-			case "{{ $event }}":
+{{ range $event, $eventData := $ch.GetDirectionEvents "ServerToClient"  }}
+			// {{ $event }}
+			case "{{ $eventData.ProtocolAlias }}":
 				return this.on{{ $event }}Fn(body)
-{{ end }}
+{{- end }}
         }
     }
 
-{{ range $event, $_ := $ch.GetDirectionEvents "ServerToClient"  }}
+{{ range $event, $eventData := $ch.GetDirectionEvents "ServerToClient"  }}
 	/**
 	 * @function {{ $ch.Name }}Channel#on{{ $event }}Fn
 	 * @param {{ "{" }}{{ $event }}{{ "}" }} event
@@ -617,6 +619,11 @@ class {{ .Name }}Channel {
             console.log("unhandled message 'ChangeName' received")
             return
         }
+		{{- range $field := $eventData.Fields -}}
+			{{- if ne $field.Name $field.ProtocolAlias }}
+		Object.defineProperty(message, "{{ $field.Name }}", Object.getOwnPropertyDescriptor(message, "{{ $field.ProtocolAlias }}")); delete message["{{ $field.ProtocolAlias }}"];
+			{{- end }}
+		{{- end }}
         this._on{{ $event }}Fn(event)
     }
     /**
@@ -631,13 +638,18 @@ class {{ .Name }}Channel {
         this._on{{ $event }}Fn = callback
     }
 {{ end }}
-{{ range $event, $_ := $ch.GetDirectionEvents "ClientToServer"  }}
+{{ range $event, $eventData := $ch.GetDirectionEvents "ClientToServer"  }}
     /**
      * @function {{ $ch.Name }}Channel#send{{ $event }}
      * @param {{ "{" }}{{ $event }}{{ "}" }} message
      */
     send{{ $event }} = function(message) {
-        this.conn.send( JSON.stringify({channel:this.getName(), name:"{{ $event }}", body: message}) );
+		{{- range $field := $eventData.Fields -}}
+			{{- if ne $field.Name $field.ProtocolAlias }}
+		Object.defineProperty(message, "{{ $field.ProtocolAlias }}", Object.getOwnPropertyDescriptor(message, "{{ $field.Name }}")); delete message["{{ $field.Name }}"];
+			{{- end }}
+		{{- end }}
+        this.conn.send( JSON.stringify({channel:this.getName(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
     }
 {{ end }}
 }
@@ -672,132 +684,132 @@ func (design *Design) StructsMap() map[string]*Struct {
 	return ret
 }
 
-func ParseChannel(name, doc string, tt *ast.InterfaceType) (*Channel, error) {
-	var eddCh = &Channel{
-		Name:       name,
-		Doc:        doc,
-		Directions: make(map[Direction]map[string]bool),
-	}
-	if tt.Methods == nil {
-		return eddCh, nil
-	}
-
-	for _, m := range tt.Methods.List {
-		fnt, ok := m.Type.(*ast.FuncType)
-		if !ok {
-			continue
-		}
-		if len(m.Names) == 0 {
-			continue
-		}
-		directive := m.Names[0].Name
-		switch directive {
-		default:
-			return nil, fmt.Errorf("unknown directive '%s' in channel %s", directive, eddCh.Name)
-		case "Enable":
-			if eddCh.Enabled != nil {
-				return nil, fmt.Errorf("'Enable' declared twice in channel %s", eddCh.Name)
-			}
-
-			eddCh.Enabled = make([]string, 0)
-			var mEnabled = make(map[string]bool)
-
-			if fnt.Params == nil {
-				break
-			}
-
-			for _, p := range fnt.Params.List {
-				if ident, ok := p.Type.(*ast.Ident); ok {
-					if mEnabled[ident.Name] {
-						return nil, fmt.Errorf("try to enable '%s' in channel %s twice", ident.Name, eddCh.Name)
-					}
-					eddCh.Enabled = append(eddCh.Enabled, ident.Name)
-					mEnabled[ident.Name] = true
-				}
-			}
-		case ServerToClient, ClientToServer:
-			if eddCh.Directions[Direction(directive)] != nil {
-				return nil, fmt.Errorf("%s declared twice in channel %s", directive, eddCh.Name)
-			}
-			var m = make(map[string]bool)
-			eddCh.Directions[Direction(directive)] = m
-			if fnt.Params == nil {
-				break
-			}
-			for _, p := range fnt.Params.List {
-				if ident, ok := p.Type.(*ast.Ident); ok {
-					if m[ident.Name] {
-						return nil, fmt.Errorf("try to set direction %s for '%s' in channel %s twice", directive, ident.Name, eddCh.Name)
-					}
-					m[ident.Name] = true
-				}
-			}
-		}
-	}
-	return eddCh, nil
-}
-func (design *Design) ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
-	var eddSt = &Struct{
-		Name: name,
-		Doc:  doc,
-	}
-	var mfield = make(map[string]bool)
-	if tt.Fields == nil {
-		return eddSt, nil
-	}
-	for _, field := range tt.Fields.List {
-		if len(field.Names) == 0 {
-			return nil, fmt.Errorf("cannot parse anonymous fields in %s struct", name)
-		}
-
-		var fieldname = field.Names[0].Name
-		//var fieldIdent *ast.Ident
-		var IsPointer = false
-		var typeName string
-		switch t := field.Type.(type) {
-		default:
-			return nil, fmt.Errorf("cannot parse field %s in %s struct", fieldname, name)
-		case *ast.ArrayType:
-			idt, ok := t.Elt.(*ast.Ident)
-			if !ok {
-				return nil, fmt.Errorf("cannot parse slice field %s in %s struct", fieldname, name)
-			}
-			typeName = "[]" + idt.Name
-		case *ast.StructType:
-			var subSt, err = design.ParseStruct(field.Names[0].Name, field.Doc.Text(), t)
-			if err != nil {
-				return nil, fmt.Errorf("cannot parse struct field %s in %s struct", fieldname, name)
-			}
-			design.Structs = append(design.Structs, subSt)
-
-		case *ast.MapType:
-			typeName = "map[" + t.Key.(*ast.Ident).Name + "]"
-			tv, ok := t.Value.(*ast.Ident)
-			if !ok {
-				return nil, fmt.Errorf("cannot parse field %s in %s struct (map value must not be a map)", fieldname, name)
-			}
-			typeName += tv.Name
-		case *ast.Ident:
-			typeName = t.Name
-		case *ast.StarExpr:
-			ti, ok := t.X.(*ast.Ident)
-			if !ok {
-				return nil, fmt.Errorf("cannot parse field %s in %s struct (multi level IsPointer not supported)", fieldname, name)
-			}
-			typeName = ti.Name
-			IsPointer = true
-		}
-
-		if _, ok := mfield[fieldname]; ok {
-			return nil, fmt.Errorf("field %s declared twice in %s", fieldname, name)
-		}
-		mfield[fieldname] = true
-		eddSt.Fields = append(eddSt.Fields, Field{
-			Name:        fieldname,
-			TypeName:    typeName,
-			TypePointer: IsPointer,
-			Doc:         field.Doc.Text(),
-		})
-	}
-	return eddSt, nil
-}
+//func ParseChannel(name, doc string, tt *ast.InterfaceType) (*Channel, error) {
+//	var eddCh = &Channel{
+//		Name:       name,
+//		Doc:        doc,
+//		Directions: make(map[Direction]map[string]bool),
+//	}
+//	if tt.Methods == nil {
+//		return eddCh, nil
+//	}
+//
+//	for _, m := range tt.Methods.List {
+//		fnt, ok := m.Type.(*ast.FuncType)
+//		if !ok {
+//			continue
+//		}
+//		if len(m.Names) == 0 {
+//			continue
+//		}
+//		directive := m.Names[0].Name
+//		switch directive {
+//		default:
+//			return nil, fmt.Errorf("unknown directive '%s' in channel %s", directive, eddCh.Name)
+//		case "Enable":
+//			if eddCh.Enabled != nil {
+//				return nil, fmt.Errorf("'Enable' declared twice in channel %s", eddCh.Name)
+//			}
+//
+//			eddCh.Enabled = make([]string, 0)
+//			var mEnabled = make(map[string]bool)
+//
+//			if fnt.Params == nil {
+//				break
+//			}
+//
+//			for _, p := range fnt.Params.List {
+//				if ident, ok := p.Type.(*ast.Ident); ok {
+//					if mEnabled[ident.Name] {
+//						return nil, fmt.Errorf("try to enable '%s' in channel %s twice", ident.Name, eddCh.Name)
+//					}
+//					eddCh.Enabled = append(eddCh.Enabled, ident.Name)
+//					mEnabled[ident.Name] = true
+//				}
+//			}
+//		case ServerToClient, ClientToServer:
+//			if eddCh.Directions[Direction(directive)] != nil {
+//				return nil, fmt.Errorf("%s declared twice in channel %s", directive, eddCh.Name)
+//			}
+//			var m = make(map[string]bool)
+//			eddCh.Directions[Direction(directive)] = m
+//			if fnt.Params == nil {
+//				break
+//			}
+//			for _, p := range fnt.Params.List {
+//				if ident, ok := p.Type.(*ast.Ident); ok {
+//					if m[ident.Name] {
+//						return nil, fmt.Errorf("try to set direction %s for '%s' in channel %s twice", directive, ident.Name, eddCh.Name)
+//					}
+//					m[ident.Name] = true
+//				}
+//			}
+//		}
+//	}
+//	return eddCh, nil
+//}
+//func (design *Design) ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
+//	var eddSt = &Struct{
+//		Name: name,
+//		Doc:  doc,
+//	}
+//	var mfield = make(map[string]bool)
+//	if tt.Fields == nil {
+//		return eddSt, nil
+//	}
+//	for _, field := range tt.Fields.List {
+//		if len(field.Names) == 0 {
+//			return nil, fmt.Errorf("cannot parse anonymous fields in %s struct", name)
+//		}
+//
+//		var fieldname = field.Names[0].Name
+//		//var fieldIdent *ast.Ident
+//		var IsPointer = false
+//		var typeName string
+//		switch t := field.Type.(type) {
+//		default:
+//			return nil, fmt.Errorf("cannot parse field %s in %s struct", fieldname, name)
+//		case *ast.ArrayType:
+//			idt, ok := t.Elt.(*ast.Ident)
+//			if !ok {
+//				return nil, fmt.Errorf("cannot parse slice field %s in %s struct", fieldname, name)
+//			}
+//			typeName = "[]" + idt.Name
+//		case *ast.StructType:
+//			var subSt, err = design.ParseStruct(field.Names[0].Name, field.Doc.Text(), t)
+//			if err != nil {
+//				return nil, fmt.Errorf("cannot parse struct field %s in %s struct", fieldname, name)
+//			}
+//			design.Structs = append(design.Structs, subSt)
+//
+//		case *ast.MapType:
+//			typeName = "map[" + t.Key.(*ast.Ident).Name + "]"
+//			tv, ok := t.Value.(*ast.Ident)
+//			if !ok {
+//				return nil, fmt.Errorf("cannot parse field %s in %s struct (map value must not be a map)", fieldname, name)
+//			}
+//			typeName += tv.Name
+//		case *ast.Ident:
+//			typeName = t.Name
+//		case *ast.StarExpr:
+//			ti, ok := t.X.(*ast.Ident)
+//			if !ok {
+//				return nil, fmt.Errorf("cannot parse field %s in %s struct (multi level IsPointer not supported)", fieldname, name)
+//			}
+//			typeName = ti.Name
+//			IsPointer = true
+//		}
+//
+//		if _, ok := mfield[fieldname]; ok {
+//			return nil, fmt.Errorf("field %s declared twice in %s", fieldname, name)
+//		}
+//		mfield[fieldname] = true
+//		eddSt.Fields = append(eddSt.Fields, Field{
+//			Name:        fieldname,
+//			TypeName:    typeName,
+//			TypePointer: IsPointer,
+//			Doc:         field.Doc.Text(),
+//		})
+//	}
+//	return eddSt, nil
+//}

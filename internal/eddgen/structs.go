@@ -19,22 +19,22 @@ const (
 type Channel struct {
 	Name       string
 	Doc        string
-	Enabled    []string
+	Enabled    []*Struct
 	Directions map[Direction]map[string]bool
 }
 
 func (c *Channel) GoName() string {
 	return strings.Title(c.Name)
 }
-func (c *Channel) EnabledMap() map[string]bool {
-	var ret = make(map[string]bool)
+func (c *Channel) EnabledMap() map[string]*Struct {
+	var ret = make(map[string]*Struct)
 	for _, k := range c.Enabled {
-		ret[k] = true
+		ret[k.Name] = k
 	}
 	return ret
 }
 
-func (c *Channel) GetDirectionEvents(direction Direction) map[string]bool {
+func (c *Channel) GetDirectionEvents(direction Direction) map[string]*Struct {
 	var available = c.EnabledMap()
 	var revDirection Direction = ClientToServer
 	if direction == ClientToServer {
@@ -57,6 +57,7 @@ type Type struct {
 
 type Field struct {
 	Name        string
+	Alias       string
 	TypeName    string
 	TypePointer bool
 	Type        Type
@@ -90,12 +91,12 @@ func (f *Field) GoName() string {
 
 func (f *Field) GoAnnotation() string {
 	if f.TypePointer {
-		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.Name)
+		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.ProtocolAlias())
 	}
 	if f.Direction != Any {
-		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.Name)
+		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.ProtocolAlias())
 	}
-	return fmt.Sprintf("`json:\"%s\"`", f.Name)
+	return fmt.Sprintf("`json:\"%s\"`", f.ProtocolAlias())
 }
 func (f *Field) DirectionDoc() string {
 	if f.Direction != Any {
@@ -153,8 +154,16 @@ func (f *Field) JsType() string {
 
 }
 
+func (f *Field) ProtocolAlias() string {
+	if len(f.Alias) > 0 {
+		return f.Alias
+	}
+	return f.Name
+}
+
 type Struct struct {
 	Name   string
+	Alias  string
 	Fields []Field
 	Doc    string
 }
@@ -172,6 +181,14 @@ func (s *Struct) FieldsWithStrictDirection(direction Direction) []*Field {
 func (s *Struct) GoName() string {
 	return strings.Title(s.Name)
 }
+
+func (s *Struct) ProtocolAlias() string {
+	if len(s.Alias) > 0 {
+		return s.Alias
+	}
+	return s.Name
+}
+
 func (s *Struct) HasDoc() bool {
 	return len(s.Doc) > 0
 }
