@@ -621,7 +621,7 @@ class {{ .Name }}Channel {
         }
 		{{- range $field := $eventData.Fields -}}
 			{{- if ne $field.Name $field.ProtocolAlias }}
-		Object.defineProperty(message, "{{ $field.Name }}", Object.getOwnPropertyDescriptor(message, "{{ $field.ProtocolAlias }}")); delete message["{{ $field.ProtocolAlias }}"];
+		Object.defineProperty(event, "{{ $field.Name }}", Object.getOwnPropertyDescriptor(event, "{{ $field.ProtocolAlias }}")); delete event["{{ $field.ProtocolAlias }}"];
 			{{- end }}
 		{{- end }}
         this._on{{ $event }}Fn(event)
