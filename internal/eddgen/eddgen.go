@@ -654,6 +654,14 @@ class {{ .Name }}Channel {
 {{ end }}
 }
 {{ end }}
+export {
+{{- range $i, $ch := .Channels -}}
+	{{- if eq $i 0 -}}
+	{{ .Name }}Channel
+	{{- else -}}{{ .Name }}Channel,
+	{{- end -}}
+{{- end -}}
+}
 `
 	var tmpl, err = template.New("clientTmpl").Funcs(template.FuncMap{
 		"TrimSpace": strings.TrimSpace,
