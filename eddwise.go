@@ -182,6 +182,7 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 			c.Response().Header.Add("content-type", "application/javascript")
 			return c.Send(eddclientJS)
 		}
+		log.Println(c.Request().URI(), c.IP())
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			return c.Next()
