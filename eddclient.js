@@ -75,3 +75,5 @@ class EddClient {
         this._onChanErr = callback
     }
 }
+
+export {EddClient};
