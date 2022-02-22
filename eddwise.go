@@ -182,7 +182,7 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 			c.Response().Header.Add("content-type", "application/javascript")
 			return c.Send(eddclientJS)
 		}
-		log.Println(c.Request().URI(), c.IP())
+		log.Println("mw", c.Request().URI(), c.IP())
 		if websocket.IsWebSocketUpgrade(c) {
 			c.Locals("allowed", true)
 			return c.Next()
@@ -191,7 +191,7 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 	})
 
 	s.App.Get(wsPath, websocket.New(func(c *websocket.Conn) {
-
+		log.Println("new client is connecting", c.RemoteAddr().String())
 		var client = &ClientSocket{
 			Conn:   c,
 			Server: s,
