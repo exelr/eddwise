@@ -272,7 +272,7 @@ func (s *ServerSocket) Register(ch ImplChannel) error {
 	if err := ch.Bind(s); err != nil {
 		return err
 	}
-	s.RegisteredChannels[ch.Name()] = ch
+	s.RegisteredChannels[ch.Alias()] = ch
 	return ch.SetReceiver(ch)
 }
 

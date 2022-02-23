@@ -656,7 +656,7 @@ class {{ .Name }}Channel {
 		Object.defineProperty(message, "{{ $field.ProtocolAlias }}", Object.getOwnPropertyDescriptor(message, "{{ $field.Name }}")); delete message["{{ $field.Name }}"];
 			{{- end }}
 		{{- end }}
-        this.conn.send( JSON.stringify({channel:this.getName(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
+        this.conn.send( JSON.stringify({channel:this.getAlias(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
     }
 {{ end }}
 }
