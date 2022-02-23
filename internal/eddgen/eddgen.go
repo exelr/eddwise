@@ -375,6 +375,10 @@ func (ch *{{ $ch.GoName }}) Name() string {
 	return "{{ $ch.Name }}"
 }
 
+func (ch *{{ $ch.GoName }}) Alias() string {
+	return "{{ $ch.ProtocolAlias }}"
+}
+
 func (ch *{{ $ch.GoName }}) Bind(server eddwise.Server) error {
 	ch.server = server
 	return nil

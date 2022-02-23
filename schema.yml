@@ -56,6 +56,8 @@ properties:
         required:
           - enable
         properties:
+          alias:
+            type: string
           enable:
             type: array
             items:

@@ -266,8 +266,8 @@ func (s *ServerSocket) Close() error {
 }
 
 func (s *ServerSocket) Register(ch ImplChannel) error {
-	if _, ok := s.RegisteredChannels[ch.Name()]; ok {
-		return fmt.Errorf("channel '%s' is already registered", ch.Name())
+	if _, ok := s.RegisteredChannels[ch.Alias()]; ok {
+		return fmt.Errorf("channel '%s' is already registered (alias: '%s')", ch.Name(), ch.Alias())
 	}
 	if err := ch.Bind(s); err != nil {
 		return err
@@ -397,6 +397,7 @@ type EventMessage struct {
 
 type ImplChannel interface {
 	Name() string
+	Alias() string
 	Bind(Server) error
 	Route(Context, *EventMessage) error
 	GetServer() Server

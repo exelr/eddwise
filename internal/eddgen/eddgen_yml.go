@@ -28,6 +28,7 @@ type YamlFullField struct {
 }
 
 type YamlChannel struct {
+	Alias  string    `yaml:"alias"`
 	Enable yaml.Node `yaml:"enable"`
 }
 
@@ -178,6 +179,7 @@ func (design *Design) ParseYaml(filePath string) error {
 	for name, chYaml := range yamlDesign.Channels {
 		var ch = &Channel{
 			Name:    name,
+			Alias:   chYaml.Alias,
 			Doc:     "",
 			Enabled: nil,
 			Directions: map[Direction]map[string]bool{

@@ -18,6 +18,7 @@ const (
 
 type Channel struct {
 	Name       string
+	Alias      string
 	Doc        string
 	Enabled    []*Struct
 	Directions map[Direction]map[string]bool
@@ -26,12 +27,20 @@ type Channel struct {
 func (c *Channel) GoName() string {
 	return strings.Title(c.Name)
 }
+
 func (c *Channel) EnabledMap() map[string]*Struct {
 	var ret = make(map[string]*Struct)
 	for _, k := range c.Enabled {
 		ret[k.Name] = k
 	}
 	return ret
+}
+
+func (c *Channel) ProtocolAlias() string {
+	if len(c.Alias) > 0 {
+		return c.Alias
+	}
+	return c.Name
 }
 
 func (c *Channel) GetDirectionEvents(direction Direction) map[string]*Struct {
