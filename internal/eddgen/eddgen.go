@@ -423,12 +423,12 @@ func (ch *{{ $ch.GoName }}) On{{ $ev | goname }}(eddwise.Context, *{{ $ev | gona
 
 {{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
 func (ch *{{ $ch.GoName }}) Send{{ $ev | goname }}(client eddwise.Client, msg *{{ $ev | goname }}) error {
-	return client.Send(ch.Name(), msg)
+	return client.Send(ch.Alias(), msg)
 }
 {{ end }}
 {{ range $ev, $_ := $ch.GetDirectionEvents "ServerToClient" }}
 func (ch *{{ $ch.GoName }}) Broadcast{{ $ev | goname }}(clients []eddwise.Client, msg *{{ $ev | goname }}) error {
-	return eddwise.Broadcast(ch.Name(), msg, clients)
+	return eddwise.Broadcast(ch.Alias(), msg, clients)
 }
 {{ end }}
 

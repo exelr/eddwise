@@ -164,15 +164,15 @@ func (s *ServerSocket) RegisterStatic(path, dir string) {
 	s.registeredStatic[path] = dir
 }
 
-func (s *ServerSocket) StartWS(wsPath string, port int) error {
+func (s *ServerSocket) CustomFiberApp(app *fiber.App) {
+	s.App = app
+}
 
-	if s.App != nil {
-		if err := s.Close(); err != nil {
-			return err
-		}
+func (s *ServerSocket) initWS(wsPath string) {
+	if s.App == nil {
+		s.App = fiber.New()
 	}
 
-	s.App = fiber.New()
 	for path, dir := range s.registeredStatic {
 		s.App.Static(path, dir)
 	}
@@ -258,7 +258,16 @@ func (s *ServerSocket) StartWS(wsPath string, port int) error {
 	}, websocket.Config{
 		EnableCompression: true,
 	}))
+}
+
+func (s *ServerSocket) StartWS(wsPath string, port int) error {
+	s.initWS(wsPath)
 	return s.App.Listen(fmt.Sprintf(":%d", port))
+}
+
+func (s *ServerSocket) StartWSS(wsPath string, port int, certFile, keyFile string) error {
+	s.initWS(wsPath)
+	return s.App.ListenTLS(fmt.Sprintf(":%d", port), certFile, keyFile)
 }
 
 func (s *ServerSocket) Close() error {
