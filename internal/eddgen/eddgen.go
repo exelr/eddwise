@@ -597,6 +597,9 @@ class {{ .Name }}Channel {
 	getName() {
 		return "{{ $ch.Name }}"
 	}
+	getAlias() {
+		return "{{ $ch.ProtocolAlias }}"
+	}
 	setConn(conn) {
 		this.conn = conn
 	}

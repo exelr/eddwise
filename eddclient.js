@@ -35,7 +35,7 @@ class EddClient {
     }
 
     register(channel) {
-        this.channels[channel.getName()] = channel
+        this.channels[channel.getAlias()] = channel
         channel.setConn(this.conn)
     }
 

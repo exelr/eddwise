@@ -62,6 +62,9 @@ func (ch *TestChannel) GetServer() Server {
 func (ch *TestChannel) Name() string {
 	return "test"
 }
+func (ch *TestChannel) Alias() string {
+	return "test"
+}
 
 type TestResponse string
 
