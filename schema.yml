@@ -11,6 +11,8 @@ $id: "https://github.com/exelr/eddwise/schema.yml"
   - uint16
   - uint32
   - uint64
+  - byte
+  - bool
   - string
   - "[]byte"
 type: object
