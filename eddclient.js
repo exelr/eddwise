@@ -2,9 +2,13 @@ class EddClient {
     constructor(url) {
         this.channels = {}
         this.url = url
+        this.is_connected = false;
     }
 
     start(){
+        if(this.is_connected){
+            return
+        }
         const client = this
         this.conn = new WebSocket(this.url);
         this.conn.onclose = function() { client.disconnected() }
@@ -34,12 +38,23 @@ class EddClient {
         }
     }
 
+    stop(){
+        if(this.is_connected) {
+            this.is_connected = false;
+            this.conn.close();
+        }
+    }
+
     register(channel) {
         this.channels[channel.getAlias()] = channel
-        channel.setConn(this.conn)
+        if(this.conn) {
+            channel.setConn(this.conn)
+        }
+
     }
 
     connected(){
+        this.is_connected = true;
         for (let i in this.channels) {
             if(this.channels.hasOwnProperty(i)) {
                 if(this.channels[i]._connectedFn != null) {
@@ -50,6 +65,7 @@ class EddClient {
     }
 
     disconnected(){
+        this.is_connected = false;
         for (let i in this.channels) {
             if(this.channels.hasOwnProperty(i)) {
                 if(this.channels[i]._disconnectedFn != null) {
