@@ -564,7 +564,7 @@ func (design *Design) GenerateClient(w io.Writer) error {
 class {{ .Name }}Channel {
 	constructor() {
 		Object.defineProperty(this, "getName", { configurable: false, writable: false, value: this.getName });
-		Object.defineProperty(this, "setConn", { configurable: false, writable: false, value: this.setConn });
+		Object.defineProperty(this, "setClient", { configurable: false, writable: false, value: this.setClient });
 		Object.defineProperty(this, "route", { configurable: false, writable: false, value: this.route });
 {{ range $event, $_ := $ch.GetDirectionEvents "ClientToServer"  }}
 		Object.defineProperty(this, "{{ $event }}", { configurable: false, writable: false, value: this.send{{ $event }} });{{ end }}
@@ -600,8 +600,8 @@ class {{ .Name }}Channel {
 	getAlias() {
 		return "{{ $ch.ProtocolAlias }}"
 	}
-	setConn(conn) {
-		this.conn = conn
+	setClient(client) {
+		this.client = client
 	}
 	route(name, body) {
 		switch(name) {
@@ -656,7 +656,7 @@ class {{ .Name }}Channel {
 		Object.defineProperty(message, "{{ $field.ProtocolAlias }}", Object.getOwnPropertyDescriptor(message, "{{ $field.Name }}")); delete message["{{ $field.Name }}"];
 			{{- end }}
 		{{- end }}
-        this.conn.send( JSON.stringify({channel:this.getAlias(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
+        return this.client.send( JSON.stringify({channel:this.getAlias(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
     }
 {{ end }}
 }

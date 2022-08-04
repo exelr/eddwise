@@ -11,16 +11,19 @@ class EddClient {
         }
         const client = this
         this.conn = new WebSocket(this.url);
-        this.conn.onclose = function() { client.disconnected() }
-        this.conn.onopen = function() { client.connected() }
-        this.conn.onerror = this.error
         this._onChanErr = function(err){
             console.log("eddwise error from server:", err)
         }
+        this.conn.onerror = (event) => {
+            this._onChanErr("error in socket communication")
+        }
+        this.conn.onclose = function() { client.disconnected() }
+        this.conn.onopen = function() { client.connected() }
+
 
         for (let i in this.channels) {
             if(this.channels.hasOwnProperty(i)) {
-                this.channels[i].setConn(this.conn)
+                this.channels[i].setClient(this)
             }
         }
 
@@ -31,7 +34,9 @@ class EddClient {
                 return
             }
             if(!client.channels.hasOwnProperty(data.channel)){
-                console.log("received message from unknown channel ", data)
+                client._onChanErr("received message from unknown channel, see console for details")
+                console.log("received message from unknown channel, see console for details", data)
+                return
             }
             const ch = client.channels[data.channel]
             ch.route(data.name, data.body)
@@ -48,7 +53,7 @@ class EddClient {
     register(channel) {
         this.channels[channel.getAlias()] = channel
         if(this.conn) {
-            channel.setConn(this.conn)
+            channel.setClient(this)
         }
 
     }
@@ -75,8 +80,14 @@ class EddClient {
         }
     }
 
-    error(err){
-        console.log("error in socket communication:", err)
+
+    send(msg){
+        if(!this.is_connected) {
+            this._onChanErr('attempting to send message on inactive connection')
+            return false
+        }
+        this.conn.send(msg);
+        return true
     }
 
     /**
@@ -90,6 +101,7 @@ class EddClient {
     onChanErr(callback) {
         this._onChanErr = callback
     }
+
 }
 
 export {EddClient};
