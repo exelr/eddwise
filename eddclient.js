@@ -9,10 +9,18 @@ class EddClient {
         if(this.is_connected){
             return
         }
+
+        if(!this._onChanErr) {
+            this._onChanErr = function (err) {
+                console.log("eddwise error from server:", err)
+            }
+        }
+
         const client = this
-        this.conn = new WebSocket(this.url);
-        this._onChanErr = function(err){
-            console.log("eddwise error from server:", err)
+        try {
+            this.conn = new WebSocket(this.url);
+        } catch(err){
+            this._onChanErr("error while dialing ws " + this.url + " : " + err)
         }
         this.conn.onerror = (event) => {
             this._onChanErr("error in socket communication")
