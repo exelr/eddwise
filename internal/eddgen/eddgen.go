@@ -1,7 +1,9 @@
 package eddgen
 
 import (
+	"bytes"
 	"fmt"
+	"go/format"
 	"io"
 	"sort"
 	"strings"
@@ -13,72 +15,51 @@ type Design struct {
 	Name     string
 	Channels []*Channel
 	Structs  []*Struct
+
+	structMap map[string]*Struct
 }
 
-//func NewDesign(module string) *Design {
-//	return &Design{Module: module}
-//}
+func (design *Design) ValidateType(_type Type) error {
+	structs := design.StructsMap()
+	switch t := _type.(type) {
+	case PrimitiveType:
+		switch t {
+		default:
+			return fmt.Errorf("unknown type '%s'", t)
+		case "any", "bool", "byte", "complex128", "complex64", "error", "float32", "float64", "int", "int16", "int32", "int64", "int8", "rune", "string", "uint", "uint16", "uint32", "uint64", "uint8":
 
-//func (design *Design) ParseAndValidate(filePath string) error {
-//	if err := design.Parse(filePath); err != nil {
-//		return err
-//	}
-//	return design.Validate()
-//}
+		}
+	case *RefType:
+		if _, ok := structs[t.ref]; !ok {
+			return fmt.Errorf("ref type '%s' is not defined", t.ref)
+		}
+		t.refStruct = structs[t.ref]
+		if err := design.ValidateStruct(t.refStruct); err != nil {
+			return err
+		}
+	case *NestedType:
+		if err := design.ValidateStruct(t.Struct); err != nil {
+			return err
+		}
+	case *MapType:
+		if err := design.ValidateType(t.keyType); err != nil {
+			return err
+		}
+		if err := design.ValidateType(t.valueType.Type); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-//func (design *Design) Parse(filePath string) error {
-//
-//	file, err := os.Open(filePath)
-//	if err != nil {
-//		return fmt.Errorf("unable to open file %s: %w\n", filePath, err)
-//	}
-//	defer func() { _ = file.Close() }()
-//
-//	var fSet = token.NewFileSet() // positions are relative to fSet
-//
-//	// Parse src but stop after processing the imports.
-//	f, err := parser.ParseFile(fSet, filePath, file, parser.ParseComments)
-//	if err != nil {
-//		return fmt.Errorf("unable to parse file %s: %w", filePath, err)
-//	}
-//
-//	design.Name = f.Name.Name
-//
-//	for _, d := range f.Decls {
-//		var gen, ok = d.(*ast.GenDecl)
-//		if !ok {
-//			continue
-//		}
-//
-//		if len(gen.Specs) == 0 {
-//			continue
-//		}
-//
-//		t, ok := gen.Specs[0].(*ast.TypeSpec)
-//		if !ok {
-//			continue
-//		}
-//
-//		switch tt := t.Type.(type) {
-//		case *ast.InterfaceType:
-//			var eddCh, err = ParseChannel(t.Name.Name, t.Doc.Text(), tt)
-//			if err != nil {
-//				return fmt.Errorf("unable to parse channel: %w", err)
-//			}
-//			design.Channels = append(design.Channels, eddCh)
-//		case *ast.StructType:
-//			var eddSt, err = design.ParseStruct(t.Name.Name, t.Doc.Text(), tt)
-//			if err != nil {
-//				return fmt.Errorf("unable to parse struct: %w", err)
-//			}
-//			design.Structs = append(design.Structs, eddSt)
-//		}
-//
-//	}
-//
-//	return nil
-//
-//}
+func (design *Design) ValidateStruct(s *Struct) error {
+	for _, f := range s.Fields {
+		if err := design.ValidateType(f.Type.Type); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (design *Design) Validate() error {
 	//validate if direction of events in channels are ok
@@ -106,26 +87,8 @@ func (design *Design) Validate() error {
 
 	//resolve type dependencies
 	for _, s := range design.Structs {
-		for _, f := range s.Fields {
-			switch f.TypeName {
-			case "bool", "byte", "complex128", "complex64", "error", "float32", "float64", "int", "int16", "int32", "int64", "int8", "rune", "string", "uint", "uint16", "uint32", "uint64", "uint8", "uintptr":
-				//builtin
-			case "[]byte":
-				//builtin todo add a proper way to parse slices
-			default:
-				if strings.HasPrefix(f.TypeName, "map[") {
-					//builtin
-					continue
-				}
-				def, ok := structs[f.RawType()]
-				if !ok {
-					return fmt.Errorf("unknown type '%s' of field '%s' in struct '%s'", f.RawType(), f.Name, s.Name)
-				}
-				f.Type = Type{
-					Name: f.TypeName,
-					Def:  def,
-				}
-			}
+		if err := design.ValidateStruct(s); err != nil {
+			return err
 		}
 	}
 	// entities named channel + "Context" and channel + "DefaultContext" and channel + "Recv" are reserved
@@ -181,7 +144,7 @@ func main() {
 
 	tmpl, err := template.New("serverSkeletonMainTmpl").Funcs(template.FuncMap{
 		"LowerFirst": LowerFirst,
-		"goname":     strings.Title,
+		"goname":     GoName,
 	}).Parse(serverSkeletonMainTmpl)
 	if err != nil {
 		return err
@@ -231,7 +194,7 @@ func (ch *{{ $ch.GoName }}Channel) On{{ $ev | goname }} (ctx eddwise.Context, {{
 
 	tmpl, err = template.New("serverSkeletonPackageTmpl").Funcs(template.FuncMap{
 		"LowerFirst": LowerFirst,
-		"goname":     strings.Title,
+		"goname":     GoName,
 	}).Parse(serverSkeletonPackageTmpl)
 	if err != nil {
 		return err
@@ -271,7 +234,7 @@ func TestBasicScenario{{ $ch.GoName }}(t *testing.T) {
 
 	tmpl, err = template.New("serverSkeletonPackageTestTmpl").Funcs(template.FuncMap{
 		"LowerFirst": LowerFirst,
-		"goname":     strings.Title,
+		"goname":     GoName,
 	}).Parse(serverSkeletonPackageTestTmpl)
 	if err != nil {
 		return err
@@ -344,7 +307,18 @@ func (design *Design) SkeletonClient(w io.Writer) error {
 	}
 	return nil
 }
-
+func ExecuteTemplateWithGoFmt(tmpl *template.Template, w io.Writer, data interface{}) error {
+	var buf = bytes.NewBuffer(nil)
+	if err := tmpl.Execute(buf, data); err != nil {
+		return err
+	}
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(formatted)
+	return err
+}
 func (design *Design) GenerateServer(w io.Writer) error {
 	var serverTmpl = `// Code generated by eddwise, DO NOT EDIT.
 
@@ -435,18 +409,8 @@ func (ch *{{ $ch.GoName }}) Broadcast{{ $ev | goname }}(clients []eddwise.Client
 {{ end }}
 
 // Event structures
-
 {{ range $st := .Structs }}
-{{ if $st.HasDoc }}
-{{ $st.GoDoc }}
-{{ end -}}
-type {{ $st.GoName }} struct {
-{{- range $field := $st.Fields -}}
-	{{- if $field.HasDoc }}
-	{{ $field.GoDoc }}{{ end }}
-	{{ $field.GoName }} {{ $field.GoType }} {{ $field.GoAnnotation }} {{ $field.DirectionDoc }}
-{{- end }}
-}
+{{ $st.GoDef }}
 
 func (evt *{{ $st.GoName }}) GetEventName() string {
 	return "{{ $st.Name }}"
@@ -458,8 +422,8 @@ func (evt *{{ $st.GoName }}) ProtocolAlias() string {
 
 func (evt *{{ $st.GoName }}) CheckSendFields() error {
 {{- range $field := $st.FieldsWithStrictDirection "ClientToServer" }} 
-	if evt.{{ $field.GoName }} != nil {
-		return errors.New("{{ $st.GoName }}.{{ $field.GoName }} must not be set")
+	if evt.{{ $field }} != nil {
+		return errors.New("{{ $st.GoName }}.{{ $field }} must not be set")
 	}
 {{- end }}
 	return nil
@@ -467,23 +431,32 @@ func (evt *{{ $st.GoName }}) CheckSendFields() error {
 
 func (evt *{{ $st.GoName }}) CheckReceivedFields() error {
 {{- range $field := $st.FieldsWithStrictDirection "ServerToClient" }} 
-	if evt.{{ $field.GoName }} != nil {
-		return errors.New("{{ $field.Name }} is an invalid field")
+	if evt.{{ $field }} != nil {
+		return errors.New("{{ $st.GoName }}.{{ $field }} is an invalid field")
 	}
 {{- end }}
 	return nil
 }
+
+{{- range $field := $st.TopFieldsWithStrictDirection "ServerToClient" }} 
+func (evt *{{ $st.GoName }}) Set{{ $field.GoName }}({{ $field.Name }} {{ $field.Type.GoType }}) *{{ $st.GoName }} {
+	evt.{{ $field.GoName }} = &{{ $field.Name }}
+	return evt
+}
+{{- end }}
+
 {{ end }}
 `
 
 	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
 		"TrimSpace": strings.TrimSpace,
-		"goname":    strings.Title,
+		"goname":    GoName,
 	}).Parse(serverTmpl)
 	if err != nil {
 		return err
 	}
-	err = tmpl.Execute(w, design)
+
+	err = ExecuteTemplateWithGoFmt(tmpl, w, design)
 	if err != nil {
 		return err
 	}
@@ -532,12 +505,12 @@ func (cb *{{ $ch.GoName }}Behave) On{{ $ev | goname }}(clientId uint64, evt *{{ 
 
 	tmpl, err := template.New("serverTmpl").Funcs(template.FuncMap{
 		"TrimSpace": strings.TrimSpace,
-		"goname":    strings.Title,
+		"goname":    GoName,
 	}).Parse(serverTmpl)
 	if err != nil {
 		return err
 	}
-	err = tmpl.Execute(w, design)
+	err = ExecuteTemplateWithGoFmt(tmpl, w, design)
 	if err != nil {
 		return err
 	}
@@ -549,20 +522,13 @@ func (design *Design) GenerateClient(w io.Writer) error {
 	var clientTmpl = `// Code generated by eddwise, DO NOT EDIT.
 
 {{ range $struct := .Structs -}}
-/**
- * @typedef {{ $struct.Name }}
-{{- range $field := $struct.Fields }}
- * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if or ($field.TypePointer) (ne $field.Direction  "") }}[{{ $field.Name }}]{{ else }}{{ $field.Name }}{{ end }}{{ if gt (len $field.Doc) 0 }} - {{ $field.Doc | TrimSpace }}{{ end }} {{ $field.DirectionDoc }}
-{{- end }}
-{{- if gt (len $struct.Doc) 0 }}
- * @description {{ $struct.Doc }}
-{{- end }}
-*/
-
+{{ $struct.JsDef }}
 {{ end -}}
+import {EddChannel} from "./eddclient.js";
 {{ range $ch := .Channels }}
-class {{ .Name }}Channel {
+class {{ .Name }}Channel extends EddChannel {
 	constructor() {
+		super("{{ $ch.ProtocolAlias }}")
 		Object.defineProperty(this, "getName", { configurable: false, writable: false, value: this.getName });
 		Object.defineProperty(this, "setClient", { configurable: false, writable: false, value: this.setClient });
 		Object.defineProperty(this, "route", { configurable: false, writable: false, value: this.route });
@@ -604,6 +570,9 @@ class {{ .Name }}Channel {
 		this.client = client
 	}
 	route(name, body) {
+		if(super.route(name,body,this.getAlias())){
+            return
+        }
 		switch(name) {
 			default:
 				console.log("unexpected event ", name, "in channel {{ $ch.Name }}")
@@ -656,7 +625,7 @@ class {{ .Name }}Channel {
 		Object.defineProperty(message, "{{ $field.ProtocolAlias }}", Object.getOwnPropertyDescriptor(message, "{{ $field.Name }}")); delete message["{{ $field.Name }}"];
 			{{- end }}
 		{{- end }}
-        return this.client.send( JSON.stringify({channel:this.getAlias(), name:"{{ $eventData.ProtocolAlias }}", body: message}) );
+        return this.client.send({channel:this.getAlias(), name:"{{ $eventData.ProtocolAlias }}", body: message});
     }
 {{ end }}
 }
@@ -692,139 +661,11 @@ func (design *Design) ChannelsMap() map[string]*Channel {
 }
 
 func (design *Design) StructsMap() map[string]*Struct {
-	var ret = make(map[string]*Struct)
-	for _, k := range design.Structs {
-		ret[k.Name] = k
+	if design.structMap == nil {
+		design.structMap = make(map[string]*Struct)
+		for _, k := range design.Structs {
+			design.structMap[k.Name] = k
+		}
 	}
-	return ret
+	return design.structMap
 }
-
-//func ParseChannel(name, doc string, tt *ast.InterfaceType) (*Channel, error) {
-//	var eddCh = &Channel{
-//		Name:       name,
-//		Doc:        doc,
-//		Directions: make(map[Direction]map[string]bool),
-//	}
-//	if tt.Methods == nil {
-//		return eddCh, nil
-//	}
-//
-//	for _, m := range tt.Methods.List {
-//		fnt, ok := m.Type.(*ast.FuncType)
-//		if !ok {
-//			continue
-//		}
-//		if len(m.Names) == 0 {
-//			continue
-//		}
-//		directive := m.Names[0].Name
-//		switch directive {
-//		default:
-//			return nil, fmt.Errorf("unknown directive '%s' in channel %s", directive, eddCh.Name)
-//		case "Enable":
-//			if eddCh.Enabled != nil {
-//				return nil, fmt.Errorf("'Enable' declared twice in channel %s", eddCh.Name)
-//			}
-//
-//			eddCh.Enabled = make([]string, 0)
-//			var mEnabled = make(map[string]bool)
-//
-//			if fnt.Params == nil {
-//				break
-//			}
-//
-//			for _, p := range fnt.Params.List {
-//				if ident, ok := p.Type.(*ast.Ident); ok {
-//					if mEnabled[ident.Name] {
-//						return nil, fmt.Errorf("try to enable '%s' in channel %s twice", ident.Name, eddCh.Name)
-//					}
-//					eddCh.Enabled = append(eddCh.Enabled, ident.Name)
-//					mEnabled[ident.Name] = true
-//				}
-//			}
-//		case ServerToClient, ClientToServer:
-//			if eddCh.Directions[Direction(directive)] != nil {
-//				return nil, fmt.Errorf("%s declared twice in channel %s", directive, eddCh.Name)
-//			}
-//			var m = make(map[string]bool)
-//			eddCh.Directions[Direction(directive)] = m
-//			if fnt.Params == nil {
-//				break
-//			}
-//			for _, p := range fnt.Params.List {
-//				if ident, ok := p.Type.(*ast.Ident); ok {
-//					if m[ident.Name] {
-//						return nil, fmt.Errorf("try to set direction %s for '%s' in channel %s twice", directive, ident.Name, eddCh.Name)
-//					}
-//					m[ident.Name] = true
-//				}
-//			}
-//		}
-//	}
-//	return eddCh, nil
-//}
-//func (design *Design) ParseStruct(name, doc string, tt *ast.StructType) (*Struct, error) {
-//	var eddSt = &Struct{
-//		Name: name,
-//		Doc:  doc,
-//	}
-//	var mfield = make(map[string]bool)
-//	if tt.Fields == nil {
-//		return eddSt, nil
-//	}
-//	for _, field := range tt.Fields.List {
-//		if len(field.Names) == 0 {
-//			return nil, fmt.Errorf("cannot parse anonymous fields in %s struct", name)
-//		}
-//
-//		var fieldname = field.Names[0].Name
-//		//var fieldIdent *ast.Ident
-//		var IsPointer = false
-//		var typeName string
-//		switch t := field.Type.(type) {
-//		default:
-//			return nil, fmt.Errorf("cannot parse field %s in %s struct", fieldname, name)
-//		case *ast.ArrayType:
-//			idt, ok := t.Elt.(*ast.Ident)
-//			if !ok {
-//				return nil, fmt.Errorf("cannot parse slice field %s in %s struct", fieldname, name)
-//			}
-//			typeName = "[]" + idt.Name
-//		case *ast.StructType:
-//			var subSt, err = design.ParseStruct(field.Names[0].Name, field.Doc.Text(), t)
-//			if err != nil {
-//				return nil, fmt.Errorf("cannot parse struct field %s in %s struct", fieldname, name)
-//			}
-//			design.Structs = append(design.Structs, subSt)
-//
-//		case *ast.MapType:
-//			typeName = "map[" + t.Key.(*ast.Ident).Name + "]"
-//			tv, ok := t.Value.(*ast.Ident)
-//			if !ok {
-//				return nil, fmt.Errorf("cannot parse field %s in %s struct (map value must not be a map)", fieldname, name)
-//			}
-//			typeName += tv.Name
-//		case *ast.Ident:
-//			typeName = t.Name
-//		case *ast.StarExpr:
-//			ti, ok := t.X.(*ast.Ident)
-//			if !ok {
-//				return nil, fmt.Errorf("cannot parse field %s in %s struct (multi level IsPointer not supported)", fieldname, name)
-//			}
-//			typeName = ti.Name
-//			IsPointer = true
-//		}
-//
-//		if _, ok := mfield[fieldname]; ok {
-//			return nil, fmt.Errorf("field %s declared twice in %s", fieldname, name)
-//		}
-//		mfield[fieldname] = true
-//		eddSt.Fields = append(eddSt.Fields, Field{
-//			Name:        fieldname,
-//			TypeName:    typeName,
-//			TypePointer: IsPointer,
-//			Doc:         field.Doc.Text(),
-//		})
-//	}
-//	return eddSt, nil
-//}

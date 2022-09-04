@@ -43,6 +43,7 @@ func init() {
 		fmt.Printf("\tmode:\n")
 		fmt.Printf("\t - 'gen' to generate both client and server definitions\n")
 		fmt.Printf("\t - 'skeleton' to generate both client and server empty integrations\n\n")
+		//fmt.Printf("\t - 'check' to verify if the design is correct\n\n")
 		fmt.Printf("Available flags:\n")
 		flag.PrintDefaults()
 	}

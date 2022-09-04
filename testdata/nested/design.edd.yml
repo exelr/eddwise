@@ -1,0 +1,31 @@
+namespace: nested
+
+structs:
+  coords:
+    x: int
+    y: uint16
+  client:
+    pos: !!server .coords
+    lista: +int
+    anything: any
+    map_simple: string->int #map[string]int
+    map: string->+int #[]map[string][]int
+    map_hard: +string->++string->any #[]map[string][][]map[string]any
+    anything_arr: +any
+    nested:
+      a: !!server int
+      b: string
+      c: !!map,server
+        n1: int
+        n2: +int
+      d: !!server +.coords
+  xd:
+    xd: int
+channels:
+  mychan:
+    dual:
+      - coords
+    server:
+      - client
+    client:
+      - xd

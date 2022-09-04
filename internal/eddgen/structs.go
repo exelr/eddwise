@@ -1,9 +1,11 @@
 package eddgen
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
+	"text/template"
 	"unicode"
 	"unicode/utf8"
 )
@@ -16,6 +18,10 @@ const (
 	ClientToServer = "ClientToServer"
 )
 
+func GoName(str string) string {
+	return strings.ReplaceAll(strings.Title(strings.ReplaceAll(str, "_", " ")), " ", "")
+}
+
 type Channel struct {
 	Name       string
 	Alias      string
@@ -25,7 +31,7 @@ type Channel struct {
 }
 
 func (c *Channel) GoName() string {
-	return strings.Title(c.Name)
+	return GoName(c.Name)
 }
 
 func (c *Channel) EnabledMap() map[string]*Struct {
@@ -59,57 +65,114 @@ func (c *Channel) GetDirectionEvents(direction Direction) map[string]*Struct {
 	return available
 }
 
-type Type struct {
-	Name string
-	Def  *Struct //if Def is nil then it is a primitive
+type TypeWithAttributes struct {
+	Type
+	Array int
+}
+
+func (twa *TypeWithAttributes) GoType() string {
+	return strings.Repeat("[]", twa.Array) + twa.Type.GoType()
+}
+
+func (twa *TypeWithAttributes) JsType() string {
+	return twa.Type.JsType() + strings.Repeat("[]", twa.Array)
+}
+
+type Type interface {
+	GoType() string
+	JsType() string
+}
+
+type PrimitiveType string
+
+func (t PrimitiveType) GoType() string {
+	return string(t)
+}
+func (t PrimitiveType) JsType() string {
+	switch t {
+	case "any":
+		return "any"
+	case "bool":
+		return "boolean"
+	case "byte", "uint", "uint16", "uint32", "uint64", "uint8", "uintptr":
+		return "uint"
+	case "int", "int16", "int32", "int64", "int8":
+		return "int"
+	case "float32", "float64":
+		return "float"
+	case "error", "rune", "string":
+		return "string"
+	default:
+		return "unknown"
+	}
+}
+
+type NestedType struct {
+	Struct *Struct
+}
+
+func (t *NestedType) GoType() string {
+	return t.Struct.GoDef()
+}
+
+func (t *NestedType) JsType() string {
+	return "object"
+}
+
+type RefType struct {
+	ref       string
+	refStruct *Struct
+}
+
+func (t *RefType) GoType() string {
+	return GoName(t.ref)
+}
+
+func (t *RefType) JsType() string {
+	return t.ref
+}
+
+type MapType struct {
+	key, value string
+	keyType    Type
+	valueType  *TypeWithAttributes
+}
+
+func (t *MapType) GoType() string {
+	return fmt.Sprintf("map[%s]%s", t.keyType.GoType(), t.valueType.GoType())
+}
+
+func (t *MapType) JsType() string {
+	return fmt.Sprintf("Object.<%s, %s>", t.keyType.JsType(), t.valueType.JsType())
 }
 
 type Field struct {
-	Name        string
-	Alias       string
-	TypeName    string
-	TypePointer bool
-	Type        Type
-	Doc         string
-	Direction   Direction
-}
-
-func (f *Field) RawType() string {
-	var arr = strings.LastIndex(f.TypeName, "[]")
-	var typeNoArr = f.TypeName
-
-	if arr > -1 {
-		typeNoArr = typeNoArr[arr+2:]
-	}
-	return typeNoArr
+	Tags Tags
+	Name string
+	Type *TypeWithAttributes
+	Doc  string
 }
 
 func (f *Field) GoType() string {
-	if f.TypePointer {
-		return "*" + f.TypeName
+	if f.Tags.Direction != Any {
+		return "*" + f.Type.GoType()
 	}
-	if f.Direction != Any {
-		return "*" + f.TypeName
-	}
-	return f.TypeName
+	return f.Type.GoType()
 }
 
 func (f *Field) GoName() string {
-	return strings.Title(f.Name)
+	return GoName(f.Name)
 }
 
 func (f *Field) GoAnnotation() string {
-	if f.TypePointer {
-		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.ProtocolAlias())
-	}
-	if f.Direction != Any {
+	if f.Tags.Direction != Any {
 		return fmt.Sprintf("`json:\"%s,omitempty\"`", f.ProtocolAlias())
 	}
 	return fmt.Sprintf("`json:\"%s\"`", f.ProtocolAlias())
 }
 func (f *Field) DirectionDoc() string {
-	if f.Direction != Any {
-		return "// " + string(f.Direction)
+	if f.Tags.Direction != Any {
+		return "// " + string(f.Tags.Direction)
 	}
 	return ""
 }
@@ -126,74 +189,151 @@ func (f *Field) GoDoc() string {
 }
 
 func (f *Field) JsType() string {
-	var arr = strings.LastIndex(f.TypeName, "[]")
-	var arrRepeat = 0
-	var typeNoArr = f.TypeName
-
-	if f.Type.Def != nil {
-		return typeNoArr + strings.Repeat("[]", arrRepeat)
-	}
-
-	if arr > -1 {
-		typeNoArr = typeNoArr[arr+2:]
-		arrRepeat = arr/2 + 1
-	}
-
-	var jsPrimitive = func(t string) string {
-		switch t {
-		case "bool":
-			return "boolean"
-		case "byte", "uint", "uint16", "uint32", "uint64", "uint8", "uintptr":
-			return "uint"
-		case "int", "int16", "int32", "int64", "int8":
-			return "int"
-		case "float32", "float64":
-			return "float"
-		case "error", "rune", "string":
-			return "string"
-		default:
-			if strings.HasPrefix(typeNoArr, "map[") {
-				return "object"
-			}
-			return typeNoArr
-		}
-	}
-
-	return jsPrimitive(typeNoArr) + strings.Repeat("[]", arrRepeat)
-
+	return f.Type.JsType()
 }
 
 func (f *Field) ProtocolAlias() string {
-	if len(f.Alias) > 0 {
-		return f.Alias
+	if len(f.Tags.Alias) > 0 {
+		return f.Tags.Alias
 	}
 	return f.Name
 }
 
 type Struct struct {
+	Tags   Tags
 	Name   string
-	Alias  string
-	Fields []Field
+	Fields []*Field
 	Doc    string
 }
 
-func (s *Struct) FieldsWithStrictDirection(direction Direction) []*Field {
+func (s *Struct) TopFieldsWithStrictDirection(direction Direction) []*Field {
 	var ret = make([]*Field, 0)
 	for i, f := range s.Fields {
-		if f.Direction == direction {
-			ret = append(ret, &s.Fields[i])
+		if f.Tags.Direction == direction {
+			ret = append(ret, s.Fields[i])
 		}
 	}
 	return ret
 }
 
+func (s *Struct) FieldsWithStrictDirection(direction Direction) []string {
+	var ret = make([]string, 0)
+	for i, f := range s.Fields {
+		if f.Tags.Direction == direction {
+			ret = append(ret, s.Fields[i].GoName())
+		} else if f.Tags.Direction == Any {
+			switch t := f.Type.Type.(type) {
+			case *RefType:
+				var sub = t.refStruct.FieldsWithStrictDirection(direction)
+				for _, v := range sub {
+					ret = append(ret, f.GoName()+"."+v)
+				}
+			case *NestedType:
+				var sub = t.Struct.FieldsWithStrictDirection(direction)
+				for _, v := range sub {
+					ret = append(ret, f.GoName()+"."+v)
+				}
+
+			}
+
+		}
+	}
+	return ret
+}
+
+func (s *Struct) GoDef() string {
+	var tmplStruct = `
+{{- if .HasDoc }}
+{{ .GoDoc }}
+{{ end -}}
+{{- if .GoName }}
+type {{ .GoName }} struct {
+{{- else -}}
+struct {
+{{- end -}}
+{{- range $field := .Fields -}}
+	{{- if $field.HasDoc }}
+	{{ $field.GoDoc }}{{ end }}
+	{{ $field.GoName }} {{ $field.GoType }} {{ $field.GoAnnotation }} {{ $field.DirectionDoc }}
+{{- end }}
+}`
+
+	tmpl, err := template.New("structTmpl").Funcs(template.FuncMap{
+		"TrimSpace": strings.TrimSpace,
+		"goname":    strings.Title,
+	}).Parse(tmplStruct)
+
+	if err != nil {
+		panic(err)
+	}
+	var buf = bytes.NewBuffer(nil)
+	err = tmpl.Execute(buf, s)
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
+}
+
+type FieldWithPath struct {
+	*Field
+	Path string
+}
+
+func (s *Struct) UnnestFieldMap() []*FieldWithPath {
+	var ret = make([]*FieldWithPath, 0, len(s.Fields))
+	for _, field := range s.Fields {
+		ret = append(ret, &FieldWithPath{
+			Field: field,
+			Path:  field.Name,
+		})
+		if t, ok := field.Type.Type.(*NestedType); ok {
+			sub := t.Struct.UnnestFieldMap()
+			for _, s := range sub {
+				s.Path = field.Name + "." + s.Path
+				ret = append(ret, s)
+			}
+		}
+	}
+	return ret
+}
+
+func (s *Struct) JsDef() string {
+
+	var allFields = s.UnnestFieldMap()
+	var clientTmpl = `
+/**
+ * @typedef {{ .Struct.Name }}
+{{- range $field := .Fields }}
+ * @property {{ "{" }}{{ $field.JsType }}{{ "}" }} {{ if or (ne $field.Tags.Direction  "") }}[{{ $field.Path }}]{{ else }}{{ $field.Path }}{{ end }}{{ if gt (len $field.Doc) 0 }} - {{ $field.Doc | TrimSpace }}{{ end }} {{ $field.DirectionDoc }}
+{{- end }}
+{{- if gt (len .Struct.Doc) 0 }}
+ * @description {{ .Struct.Doc }}
+{{- end }}
+*/`
+	var tmpl, err = template.New("clientTmpl").Funcs(template.FuncMap{
+		"TrimSpace": strings.TrimSpace,
+	}).Parse(clientTmpl)
+	if err != nil {
+		panic(err)
+	}
+	var buf = bytes.NewBuffer(nil)
+	err = tmpl.Execute(buf, map[string]interface{}{
+		"Struct": s,
+		"Fields": allFields,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
+}
+
 func (s *Struct) GoName() string {
-	return strings.Title(s.Name)
+	return GoName(s.Name)
 }
 
 func (s *Struct) ProtocolAlias() string {
-	if len(s.Alias) > 0 {
-		return s.Alias
+	if len(s.Tags.Alias) > 0 {
+		return s.Tags.Alias
 	}
 	return s.Name
 }

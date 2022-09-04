@@ -27,7 +27,56 @@ func ErrMissingServerHandler(chName, eventName string) error {
 	return fmt.Errorf("handler for event '%s' on channel '%s' was not expected", eventName, chName)
 }
 
+type ClientContext interface {
+	Has(string) bool
+	Get(string) interface{}
+	Set(string, interface{})
+	setRawAuth(*Auth)
+	GetRawAuth() *Auth
+	setState(interface{})
+	GetState() interface{}
+}
+
+type ClientContextMap struct {
+	auth  *Auth
+	state interface{}
+	m     map[string]interface{}
+}
+
+func (cc *ClientContextMap) Has(key string) bool {
+	_, ok := cc.m[key]
+	return ok
+}
+
+func (cc *ClientContextMap) Get(key string) interface{} {
+	return cc.m[key]
+}
+
+func (cc *ClientContextMap) Set(key string, value interface{}) {
+	cc.m[key] = value
+}
+
+func (cc *ClientContextMap) setRawAuth(auth *Auth) {
+	cc.auth = auth
+}
+
+func (cc *ClientContextMap) GetRawAuth() *Auth {
+	if cc.auth == nil {
+		log.Println("an empty auth was requested")
+	}
+	return cc.auth
+}
+
+func (cc *ClientContextMap) setState(state interface{}) {
+	cc.state = state
+}
+
+func (cc *ClientContextMap) GetState() interface{} {
+	return cc.state
+}
+
 type Client interface {
+	ClientContext
 	GetId() uint64
 	Send(channel string, event Event) error
 	SendJSON(interface{}) error
@@ -36,6 +85,7 @@ type Client interface {
 }
 
 type ClientSocket struct {
+	ClientContextMap
 	id      uint64
 	Server  *ServerSocket
 	Conn    *websocket.Conn
@@ -56,23 +106,31 @@ func (c *ClientSocket) Send(channel string, event Event) error {
 	if c.closed {
 		return errors.New("writing to closed client")
 	}
-	var evt = &EventMessage{
+	var evt = &EventMessageToSend{
 		Channel: channel,
 		Name:    event.ProtocolAlias(),
+		Body:    event,
 	}
-	var err error
-	evt.Body, err = c.Server.Codec().Encode(event)
-	if err != nil {
-		return err
-	}
+	//var err error
+	//evt.Body, err = c.Server.Codec().Encode(event)
+	//if err != nil {
+	//	return err
+	//}
 
 	m, err := c.Server.Codec().Encode(evt)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot encode message: %w", err)
 	}
 	c.WriteMx.Lock()
 	defer c.WriteMx.Unlock()
-	if err := c.Conn.WriteMessage(websocket.TextMessage, m); err != nil {
+	var mt int
+	switch c.Server.codec.handle.(type) {
+	case *codec.JsonHandle:
+		mt = websocket.TextMessage
+	case *codec.MsgpackHandle:
+		mt = websocket.BinaryMessage
+	}
+	if err := c.Conn.WriteMessage(mt, m); err != nil {
 		return err
 	}
 	return nil
@@ -134,8 +192,12 @@ type ServerSocket struct {
 }
 
 func NewServer() *ServerSocket {
+	return NewServerWithCustomCodec(&codec.JsonHandle{})
+}
+
+func NewServerWithCustomCodec(codec codec.Handle) *ServerSocket {
 	return &ServerSocket{
-		codec:              NewCodecSerializer(&codec.JsonHandle{}),
+		codec:              NewCodecSerializer(codec),
 		registeredStatic:   make(map[string]string),
 		RegisteredChannels: make(map[string]ImplChannel),
 		Clients:            make(map[uint64]Client),
@@ -191,12 +253,32 @@ func (s *ServerSocket) initWS(wsPath string) {
 	})
 
 	s.App.Get(wsPath, websocket.New(func(c *websocket.Conn) {
+		defer func() { _ = c.Close() }()
+
 		log.Println("new client is connecting", c.RemoteAddr().String())
 		var client = &ClientSocket{
-			Conn:   c,
-			Server: s,
-			id:     atomic.AddUint64(&s.ClientAutoInc, 1),
+			ClientContextMap: ClientContextMap{auth: nil, m: map[string]interface{}{}},
+			Conn:             c,
+			Server:           s,
+			id:               atomic.AddUint64(&s.ClientAutoInc, 1),
 		}
+		var ctx = NewDefaultContext(context.Background(), s, client)
+
+		if err := s.CheckAuth(ctx, client); err != nil {
+			var ee = EventMessageToSend{
+				Channel: "errors",
+				Name:    "error",
+				Body:    fmt.Sprintf("auth error: %s", err),
+			}
+			if err := client.SendJSON(ee); err != nil {
+				log.Println("unable to write err json on auth: ", err)
+			}
+			return
+		}
+
+		defer func() {
+			_ = s.RevokeAuth(ctx, client)
+		}()
 
 		//check if it is able to connect to all channels
 		for _, ch := range s.RegisteredChannels {
@@ -216,7 +298,6 @@ func (s *ServerSocket) initWS(wsPath string) {
 		}
 
 		s.AddClient(client)
-
 		defer func() {
 			s.RemoveClient(client)
 		}()
@@ -228,8 +309,27 @@ func (s *ServerSocket) initWS(wsPath string) {
 				}
 			}
 		}()
-		defer func() { _ = c.Close() }()
-		var ctx = NewDefaultContext(context.Background(), s, client)
+
+		//Auto broadcast Join
+		for _, ch := range s.RegisteredChannels {
+			if _, ok := ch.(ImplConnManager); !ok {
+				if chUser, ok := ch.(ImplChannelWithUserJoin); ok {
+					_ = chUser.onJoin(ch, client, true)
+				}
+			}
+		}
+
+		//Auto broadcast Left
+		defer func() {
+			for _, ch := range s.RegisteredChannels {
+				if _, ok := ch.(ImplConnManager); !ok {
+					if chUser, ok := ch.(ImplChannelWithUserLeft); ok {
+						_ = chUser.onLeft(ch, client)
+					}
+				}
+			}
+		}()
+
 		var (
 			//mt  int
 			msg []byte
@@ -280,6 +380,10 @@ func (s *ServerSocket) Register(ch ImplChannel) error {
 	}
 	if err := ch.Bind(s); err != nil {
 		return err
+	}
+
+	if chAuth, ok := ch.(ImplConnManager); ok {
+		chAuth.connManagerInit()
 	}
 	s.RegisteredChannels[ch.Alias()] = ch
 	return ch.SetReceiver(ch)
@@ -396,12 +500,18 @@ func (ctx *DefaultContext) GetClient() Client {
 	return ctx.client
 }
 
+type EventMessage struct {
+	Channel string    `json:"channel"`
+	Name    string    `json:"name"`
+	Body    codec.Raw `json:"body"`
+}
+
 type EventHandler func(Context, *EventMessage) error
 
-type EventMessage struct {
-	Channel string          `json:"channel"`
-	Name    string          `json:"name"`
-	Body    json.RawMessage `json:"body"`
+type EventMessageToSend struct {
+	Channel string      `json:"channel"`
+	Name    string      `json:"name"`
+	Body    interface{} `json:"body"`
 }
 
 type ImplChannel interface {

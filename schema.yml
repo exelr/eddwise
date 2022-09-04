@@ -1,21 +1,46 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://github.com/exelr/eddwise/schema.yml"
-.enum: &typeEnum
-  - int
-  - int8
-  - int16
-  - int32
-  - int64
-  - uint
-  - uint8
-  - uint16
-  - uint32
-  - uint64
-  - byte
-  - bool
-  - string
-  - "[]byte"
-type: object
+
+components:
+  array:
+    type: string
+    pattern: "^\++\s*\.?[a-z0-9_]+$"
+  map:
+    type: string
+    pattern: "^(\+*\s*\.?[a-z0-9_]+\s*->\s*)+\s*\+*\s*\.?[a-z0-9_]+"
+  primitives:
+    type: string
+    enum:
+      - int
+      - int8
+      - int16
+      - int32
+      - int64
+      - uint
+      - uint8
+      - uint16
+      - uint32
+      - uint64
+      - byte
+      - bool
+      - string
+      - any
+      - []byte
+
+  field:
+    anyOf:
+      - $ref: '#/components/primitives'
+      - $ref: '#/components/array'
+      - $ref: '#/components/map'
+      - type: string
+        pattern: "\.[a-z0-9_]+"
+      - $ref: '#/components/struct'
+  struct:
+    type: object
+    patternProperties:
+      ".*":
+        $ref: '#/components/field'
+
 required:
   - namespace
 properties:
@@ -23,46 +48,32 @@ properties:
     type: string
   structs:
     type: object
+    additionalProperties: false
     patternProperties:
-      ".*":
-        type: object
-        additionalProperties: false
-        properties:
-          alias:
-            type: string
-          fields:
-            type: object
-            patternProperties:
-              ".*":
-                anyOf:
-                  - enum: *typeEnum
-#                  - type: &typeStr
-#                    enum:
-#                      $data: "/structs#"
-                  - type: object
-                    additionalProperties: false
-                    properties:
-                      alias:
-                        type: string
-                      type:
-                        anyOf: *typeEnum
-
-
-
+      "^[a-z0-9_]+$":
+        $ref: '#/components/struct'
   channels:
     type: object
     patternProperties:
       ".*":
         type: object
         additionalProperties: false
-        required:
-          - enable
+        anyOf:
+          - required:
+            - dual
+          - required:
+            - server
+            - client
         properties:
-          alias:
-            type: string
-          enable:
+          dual:
             type: array
             items:
               type: string
-              enum:
-                $data: "/structs#"
+          server:
+            type: array
+            items:
+              type: string
+          client:
+            type: array
+            items:
+              type: string
