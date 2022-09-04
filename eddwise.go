@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -290,11 +289,12 @@ func (s *ServerSocket) initWS(wsPath string) {
 		for _, ch := range s.RegisteredChannels {
 			if connRecv, ok := ch.(ImplChannelConnected); ok {
 				if err := connRecv.Connected(client); err != nil {
-					var ee = EventMessage{
+					var ee = EventMessageToSend{
 						Channel: "errors",
 						Name:    "error",
+						Body:    fmt.Sprintf("error while connecting on %s: %s", ch.Name(), err),
 					}
-					ee.Body, _ = json.Marshal(fmt.Sprintf("error while connecting on %s: %s", ch.Name(), err))
+
 					if err := client.SendJSON(ee); err != nil {
 						log.Println("unable to write err json on connected: ", err)
 					}
@@ -349,11 +349,11 @@ func (s *ServerSocket) initWS(wsPath string) {
 			}
 
 			if err := s.ProcessEvent(ctx, msg); err != nil {
-				var ee = EventMessage{
+				var ee = EventMessageToSend{
 					Channel: "errors",
 					Name:    "error",
+					Body:    fmt.Sprintf("error while processing event: %s", err),
 				}
-				ee.Body, _ = json.Marshal(fmt.Sprintf("error while processing event: %s", err))
 				if err := client.SendJSON(ee); err != nil {
 					log.Println("unable to write err json: ", err)
 				}
