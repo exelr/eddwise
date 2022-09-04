@@ -13,7 +13,10 @@ type RecordedEvent struct {
 	Timestamp time.Time
 }
 
+var _ eddwise.Client = (*Client)(nil)
+
 type Client struct {
+	eddwise.ClientContextMap
 	id     uint64
 	closed bool
 	events []RecordedEvent
