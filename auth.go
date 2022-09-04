@@ -43,9 +43,9 @@ type Auth struct {
 
 type StateManager[T any] struct{}
 
-func (sm *StateManager[T]) SetClientState(c Client, state interface{}) {
+func (sm *StateManager[T]) SetClientState(c Client, state T) {
 	c.setState(&UserState[T]{
-		State: state.(T),
+		State: state,
 	})
 }
 

@@ -264,14 +264,17 @@ func (design *Design) SkeletonClient(w io.Writer) error {
 {{ end }}
 </div>
 <div id="output"></div>
-<script src="//localhost:3000/{{ .Name }}/edd.js"></script>
-<script src="../../gen/{{ .Name }}/channel.js"></script>
-<script>
+<script type="module">
+  import {EddClient} from '//localhost:3000/{{ .Name }}/edd.js'
+
   var wsUri = "ws://localhost:3000/{{ .Name }}"
   var client = new EddClient(wsUri)
 {{ range $ch := .Channels }}
+  import {{"{"}}{{ $ch.Name }}Channel{{"}"}} from '../../gen/{{ .Name }}/channel.js'
+
   var ch{{ $ch.Name }} = new {{ $ch.Name }}Channel()
-  
+  window.ch{{ $ch.Name }} = ch{{ $ch.Name }}
+
   ch{{ $ch.Name }}.connected(function(){
       document.getElementById("output").innerHTML += "[{{ $ch.Name }}] <span style='color: darkgreen'>Connected</span><br>"
   })

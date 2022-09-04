@@ -40,10 +40,14 @@ type ClientContext interface {
 	GetRawAuth() *Auth
 	setState(interface{})
 	GetState() interface{}
+	GetRooms() []*Room
+	addRoom(*Room)
+	delRoom(*Room)
 }
 
 type ClientContextMap struct {
 	auth  *Auth
+	rooms sync.Map
 	state interface{}
 	m     map[string]interface{}
 }
@@ -78,6 +82,22 @@ func (cc *ClientContextMap) setState(state interface{}) {
 
 func (cc *ClientContextMap) GetState() interface{} {
 	return cc.state
+}
+
+func (cc *ClientContextMap) GetRooms() []*Room {
+	var ret = make([]*Room, 0)
+	cc.rooms.Range(func(key, value any) bool {
+		ret = append(ret, value.(*Room))
+		return true
+	})
+	return ret
+}
+func (cc *ClientContextMap) addRoom(r *Room) {
+	cc.rooms.Store(r.id, r)
+}
+
+func (cc *ClientContextMap) delRoom(r *Room) {
+	cc.rooms.Delete(r.id)
 }
 
 type Client interface {
@@ -336,6 +356,22 @@ func (s *ServerSocket) initWS(wsPath string) {
 			}
 		}()
 
+		//Auto broadcast RoomList
+		for _, ch := range s.RegisteredChannels {
+			if chRoom, ok := ch.(ImplRoomManager); ok {
+				_ = chRoom.SendPublicRooms(client)
+			}
+		}
+
+		//Auto broadcast RoomLeft
+		defer func() {
+			for _, ch := range s.RegisteredChannels {
+				if chRoom, ok := ch.(ImplRoomManager); ok {
+					_ = chRoom.RoomClientQuit(client)
+				}
+			}
+		}()
+
 		var (
 			//mt  int
 			msg []byte
@@ -391,6 +427,10 @@ func (s *ServerSocket) Register(ch ImplChannel) error {
 	if chAuth, ok := ch.(ImplConnManager); ok {
 		chAuth.connManagerInit()
 	}
+	if chRoom, ok := ch.(ImplRoomManager); ok {
+		chRoom.roomManagerInit(ch)
+	}
+
 	s.RegisteredChannels[ch.Alias()] = ch
 	return ch.SetReceiver(ch)
 }
@@ -406,6 +446,31 @@ func (s *ServerSocket) ProcessEvent(ctx Context, rawEvent []byte) error {
 	ch, ok := s.RegisteredChannels[event.Channel]
 	if !ok {
 		return fmt.Errorf("unknown channel %s", event.Channel)
+	}
+
+	var roomEvent ClientRoomEvent
+	switch event.Name {
+	case "edd:room:join_request":
+		roomEvent = &RoomJoinRequest{}
+		if err := s.Codec().Decode(event.Body, roomEvent); err != nil {
+			return err
+		}
+	case "edd:room:left_request":
+		roomEvent = &RoomLeftRequest{}
+		if err := s.Codec().Decode(event.Body, roomEvent); err != nil {
+			return err
+		}
+	case "edd:room:create_request":
+		roomEvent = &RoomCreateRequest{}
+		if err := s.Codec().Decode(event.Body, roomEvent); err != nil {
+			return err
+		}
+	}
+	if roomEvent != nil {
+		if rm, ok := ch.(ImplRoomManager); ok {
+			return rm.OnRoomEvent(ctx.GetClient(), roomEvent)
+		}
+		return fmt.Errorf("edd room events not handled")
 	}
 
 	return ch.Route(ctx, event)

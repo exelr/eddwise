@@ -207,6 +207,39 @@ class EddClient {
  * @property {string} id
  */
 
+/**
+ * @typedef room_join
+ * @property {string} id
+ * @property {string} room
+ */
+
+/**
+ * @typedef room_left
+ * @property {string} id
+ * @property {string} room
+ */
+
+/**
+ * @typedef room_create
+ * @property {string} room
+ */
+
+/**
+ * @typedef room_join_request
+ * @property {string} room
+ */
+
+/**
+ * @typedef room_left_request
+ * @property {string} room
+ */
+
+/**
+ * @typedef room_create_request
+ * @property {string} room
+ * @property {boolean} public
+ */
+
 class EddChannel {
     constructor(alias) {
         this.alias = alias
@@ -222,6 +255,15 @@ class EddChannel {
         }
         this._userLeft = () => {
             console.log("edd user left was received from server, but no handler was configured")
+        }
+        this._roomJoin = () => {
+            console.log("edd room join was received from server, but no handler was configured")
+        }
+        this._roomLeft = () => {
+            console.log("edd room left was received from server, but no handler was configured")
+        }
+        this._roomCreate = () => {
+            console.log("edd room create was received from server, but no handler was configured")
         }
     }
 
@@ -245,6 +287,15 @@ class EddChannel {
             case "edd:user:left":
                 this._userLeft(body)
                 break
+            case "edd:room:join":
+                this._roomJoin(body)
+                break
+            case "edd:room:left":
+                this._roomLeft(body)
+                break
+            case "edd:room:create":
+                this._roomCreate(body)
+                break
         }
         return true
     }
@@ -252,6 +303,19 @@ class EddChannel {
     sendAuthBasic(username, password){
         this.client.send( {channel:this.alias, name:"edd:auth:basic", body: {username:username, password:password }} );
     }
+
+    sendRoomJoinRequest(room) {
+        this.client.send({channel: this.alias, name: "edd:room:join_request", body: {room: room}})
+    }
+
+    sendRoomLeftRequest(room) {
+        this.client.send({channel: this.alias, name: "edd:room:left_request", body: {room: room}})
+    }
+
+    sendRoomCreateRequest(room, is_public) {
+        this.client.send({channel: this.alias, name: "edd:room:create_request", body: {room: room, public: !!is_public}})
+    }
+
 
     /**
      * @callback authChallengedCb
@@ -299,6 +363,42 @@ class EddChannel {
      */
     userLeft(callback) {
         this._userLeft = callback
+    }
+
+    /**
+     * @callback roomJoinCb
+     * @param {room_join} event
+     */
+    /**
+     * @function eddwiseChannel#roomJoin
+     * @param {roomJoinCb} callback
+     */
+    roomJoin(callback) {
+        this._roomJoin = callback
+    }
+
+    /**
+     * @callback roomLeftCb
+     * @param {room_left} event
+     */
+    /**
+     * @function eddwiseChannel#roomLeft
+     * @param {roomLeftCb} callback
+     */
+    roomLeft(callback) {
+        this._roomLeft = callback
+    }
+
+    /**
+     * @callback roomCreateCb
+     * @param {room_create} event
+     */
+    /**
+     * @function eddwiseChannel#roomCreate
+     * @param {roomCreateCb} callback
+     */
+    roomCreate(callback) {
+        this._roomCreate = callback
     }
 
 }
