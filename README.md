@@ -43,17 +43,19 @@ Define your design:
 namespace: pingpong # the namespace of your generated code (packages for go)
 structs:
   ping: # ping is emitted from client
-    fields:
-      id: uint # the id of the ping
+    id: uint # the id of the ping
   pong: # pong is sent from server after a ping
-    fields:
-      id: uint # the id of the pong, same as the id of the received ping
+    id: uint # the id of the pong, same as the id of the received ping
 
 channels:
   pingpong: # create a channel named pingpong
-    enable: # define the events that can pass through the channel pingpong with an optional direction
-      - !!client ping # set ping to be originated only from client 
-      - !!server pong # set pong to be originated only from server
+    client: # define the events that can pass through the channel pingpong generated from client
+      - ping # set ping to be originated only from client 
+    server: # define events generated from server
+      - pong # set pong to be originated only from server
+#    dual: # optional, you can define the events that are generated in both client and server
+#      - ping
+#      - pong
 ```
 
 Generate the code:
@@ -97,14 +99,14 @@ func main(){
 Client:
 ```html
 // web/pingpong/app.html
-<script src="//localhost:3000/pingpong/edd.js"></script>
-<script src="gen/pingpong/channel.js"></script>
-<script>
+<script type="module">
+    import {EddClient} from '/pingpong/edd.js'
+    import {pingpongChannel} from '../../gen/pingpong/channel.js'
     let client = new EddClient("ws://localhost:3000/pingpong")
-    let pingpong = new PingPongChannel()
+    let pingpong = new pingpongChannel()
     client.register(pingpong)
     
-    pingpong.onPong((pong) => {
+    pingpong.onpong((pong) => {
         console.log("received pong with id", pong.id)
     });
     
@@ -112,7 +114,7 @@ Client:
     pingpong.connected(() => {
         let id = 1;
         pinginterval = setInterval(function () {
-            pingpong.sendPing({id: id++})
+            pingpong.sendping({id: id++})
         }, 1000)
     })
     pinginterval.disconnected = function(){
