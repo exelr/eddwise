@@ -524,7 +524,7 @@ func (design *Design) GenerateClient(w io.Writer) error {
 {{ range $struct := .Structs -}}
 {{ $struct.JsDef }}
 {{ end -}}
-import {EddChannel} from "./eddclient.js";
+import {EddChannel} from "/{{ .Name }}/edd.js";
 {{ range $ch := .Channels }}
 class {{ .Name }}Channel extends EddChannel {
 	constructor() {
