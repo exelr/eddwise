@@ -1,6 +1,7 @@
 package eddwise
 
 import (
+	"encoding/json"
 	"fmt"
 	"golang.org/x/net/websocket"
 	"sync"
@@ -83,12 +84,8 @@ func (ch *TestChannel) Route(ctx Context, event *EventMessage) error {
 		return fmt.Errorf("unexpected event name '%s', expecting '%s'", event.Name, "testRequest")
 	}
 
-	if len(event.Body) != 3 {
-		return fmt.Errorf("unexpected body length != 3")
-	}
-
-	if string(event.Body) != "\"A\"" {
-		return fmt.Errorf("unexpected value for body: %s, expecting \"A\"", event.Body)
+	if string(event.Body) != "\"important message\"" {
+		return fmt.Errorf("unexpected value for body: %s, expecting \"important message\"", event.Body)
 	}
 
 	if err := ctx.GetClient().Send("test", TestResponse("B")); err != nil {
@@ -96,6 +93,12 @@ func (ch *TestChannel) Route(ctx Context, event *EventMessage) error {
 	}
 
 	return nil
+}
+
+type EventMessageTest struct {
+	Channel string          `json:"channel"`
+	Name    string          `json:"name"`
+	Body    json.RawMessage `json:"body"`
 }
 
 func TestServer(t *testing.T) {
@@ -123,15 +126,15 @@ func TestServer(t *testing.T) {
 		defer func() { _ = conn.Close() }()
 
 		// send message
-		if err := websocket.JSON.Send(conn, EventMessage{
+		if err := websocket.JSON.Send(conn, EventMessageToSend{
 			Channel: "test",
 			Name:    "testRequest",
-			Body:    []byte("\"A\""),
+			Body:    "important message",
 		}); err != nil {
 			t.Fatalf("unable to send message through socket: %s\n", err)
 		}
 
-		var response = EventMessage{}
+		var response = EventMessageTest{}
 
 		if err := websocket.JSON.Receive(conn, &response); err != nil {
 			// handle error
