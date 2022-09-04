@@ -40,6 +40,25 @@ go install github.com/exelr/eddwise/cmd/edd
 Define your design:
 ```yaml
 # design/pingpong.edd.yml
+namespace: pingpong
+structs:
+  ping:
+    id: uint
+  pong:
+    id: uint
+
+channels:
+  pingpong:
+    client:
+      - ping 
+    server:
+      - pong
+```
+<details>
+  <summary>View details</summary>
+
+```yaml
+# design/pingpong.edd.yml
 namespace: pingpong # the namespace of your generated code (packages for go)
 structs:
   ping: # ping is emitted from client
@@ -57,6 +76,7 @@ channels:
 #      - ping
 #      - pong
 ```
+</details>
 
 Generate the code:
 
