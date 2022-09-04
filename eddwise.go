@@ -20,6 +20,12 @@ import (
 //go:embed eddclient.js
 var eddclientJS []byte
 
+func ClientJS() []byte {
+	var ret = make([]byte, len(eddclientJS))
+	copy(ret, eddclientJS)
+	return ret
+}
+
 func ErrMissingServerHandler(chName, eventName string) error {
 	if len(eventName) == 0 {
 		return fmt.Errorf("empty event name")
