@@ -595,7 +595,7 @@ class {{ .Name }}Channel extends EddChannel {
 	*/
     on{{ $event }}Fn(event) {
         if(this._on{{ $event }}Fn == null) {
-            console.log("unhandled message 'ChangeName' received")
+            console.log("unhandled message '{{ $event }}' received")
             return
         }
 		{{- range $field := $eventData.Fields -}}
