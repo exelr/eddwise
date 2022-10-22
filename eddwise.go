@@ -10,6 +10,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
@@ -412,8 +413,34 @@ func (s *ServerSocket) StartWSS(wsPath string, port int, certFile, keyFile strin
 	return s.App.ListenTLS(fmt.Sprintf(":%d", port), certFile, keyFile)
 }
 
-func (s *ServerSocket) Close() error {
-	return s.App.Shutdown()
+func (s *ServerSocket) Close(timeout time.Duration) error {
+	var chClose = make(chan error, 1)
+	if timeout > 0 {
+		time.AfterFunc(10*time.Second, func() {
+			chClose <- fmt.Errorf("graceful shotdown timeout")
+		})
+	}
+
+	//close all clients
+	go func() {
+		s.ClientsMx.Lock()
+		defer s.ClientsMx.Unlock()
+		for _, cli := range s.Clients {
+			_ = cli.Close()
+		}
+	}()
+
+	//Close server
+	go func() {
+		// Gracefully shutdown the server by waiting on existing requests (except websockets).
+		if err := s.App.Shutdown(); err != nil {
+			chClose <- fmt.Errorf("server graceful shutdown failed: %w", err)
+		} else {
+			chClose <- nil
+		}
+	}()
+
+	return <-chClose
 }
 
 func (s *ServerSocket) Register(ch ImplChannel) error {
